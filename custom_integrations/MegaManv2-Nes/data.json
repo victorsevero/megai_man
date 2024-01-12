@@ -1,0 +1,20 @@
+{
+  "info": {
+    "health": {
+      "address": 106,
+      "type": "|u1"
+    },
+    "x": {
+      "address": 1152,
+      "type": "|u1"
+    },
+    "y": {
+      "address": 1536,
+      "type": "|u1"
+    },
+    "screen": {
+      "address": 1120,
+      "type": "|u1"
+    }
+  }
+}

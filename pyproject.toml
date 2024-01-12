@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
 stable-baselines3 = { extras = ["extra"], version = "^2.2.1" }
+stable-retro = "^0.9.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.12.1"

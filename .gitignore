@@ -164,3 +164,7 @@ cython_debug/
 
 # stable-retro directory
 stable-retro/
+
+# ROMs
+rom.nes
+rom.sfc
