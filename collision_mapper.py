@@ -3,11 +3,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import seaborn as sns
-from matplotlib.colors import LinearSegmentedColormap, ListedColormap
+from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
-
-sns.set_theme()
 
 
 def get_tiles_paths(prefix):
@@ -132,6 +129,7 @@ if __name__ == "__main__":
     tiles = get_tiles(tiles_prefix)
     collision_map = get_collision_map(img, tiles, start, end)
     value_grid = wavefront_expansion(collision_map)
+    np.save("cutman.npy", value_grid)
 
     custom_cmap = get_custom_cmap(value_grid.max())
     heatmap_arr = custom_cmap(value_grid, bytes=True)

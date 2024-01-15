@@ -4,6 +4,10 @@
       "address": 106,
       "type": "|u1"
     },
+    "boss_health": {
+      "address": 1729,
+      "type": "|u1"
+    },
     "x": {
       "address": 1152,
       "type": "|u1"
@@ -14,6 +18,14 @@
     },
     "screen": {
       "address": 1120,
+      "type": "|u1"
+    },
+    "camera_state": {
+      "address": 28,
+      "type": "|u1"
+    },
+    "stage": {
+      "address": 49,
       "type": "|u1"
     }
   }

@@ -1,16 +1,19 @@
-import argparse
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
 import retro
 from gymnasium.wrappers.time_limit import TimeLimit
 from stable_baselines3 import PPO
-from stable_baselines3.common.atari_wrappers import ClipRewardEnv, WarpFrame
+from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.vec_env import (
     SubprocVecEnv,
     VecFrameStack,
+    VecMonitor,
     VecTransposeImage,
 )
+
+from reward import StageRewardWrapper
 
 
 class StochasticFrameSkip(gym.Wrapper):
@@ -66,33 +69,44 @@ def make_retro(*, game, state=None, max_episode_steps=4500, **kwargs):
     return env
 
 
-def wrap_deepmind_retro(env):
-    """
-    Configure environment for retro games, using config similar to DeepMind-style Atari in openai/baseline's wrap_deepmind
-    """
-    env = WarpFrame(env)
-    env = ClipRewardEnv(env)
-    return env
+def env_test(env):
+    # just for quick use with VSCode debugger
+    from time import time
+
+    env = make_env()
+    done = False
+    rewards = []
+    observation, info = env.reset(seed=666)
+    s = time()
+    while not done:
+        action = env.action_space.sample()
+        observation, reward, terminated, truncated, info = env.step(action)
+        done = terminated or truncated
+        rewards.append(reward)
+    e = time()
+    print(e - s)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--game", default="MegaMan-Nes")
-    parser.add_argument("--state", default=retro.State.DEFAULT)
-    parser.add_argument("--scenario", default=None)
-    args = parser.parse_args()
+    script_dir = Path(__file__).parent
+    retro.data.Integrations.add_custom_path(
+        str(script_dir / "custom_integrations")
+    )
 
     def make_env():
         env = make_retro(
-            game=args.game,
-            state=args.state,
-            scenario=args.scenario,
+            game="MegaMan-v2-Nes",
+            state="CutMan",
+            inttype=retro.data.Integrations.ALL,
         )
-        env = wrap_deepmind_retro(env)
+        env = WarpFrame(env)
+        env = StageRewardWrapper(env, stage=0)
         return env
 
-    venv = VecTransposeImage(
-        VecFrameStack(SubprocVecEnv([make_env] * 8), n_stack=4)
+    venv = VecMonitor(
+        VecTransposeImage(
+            VecFrameStack(SubprocVecEnv([make_env] * 8), n_stack=4)
+        )
     )
     model = PPO(
         policy="CnnPolicy",
