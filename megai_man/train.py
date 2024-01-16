@@ -4,6 +4,7 @@ import gymnasium as gym
 import numpy as np
 import retro
 from gymnasium.wrappers.time_limit import TimeLimit
+from reward import StageRewardWrapper
 from stable_baselines3 import PPO
 from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.vec_env import (
@@ -13,7 +14,9 @@ from stable_baselines3.common.vec_env import (
     VecTransposeImage,
 )
 
-from reward import StageRewardWrapper
+retro.data.Integrations.add_custom_path(
+    str(Path(__file__).parent / "custom_integrations")
+)
 
 
 class StochasticFrameSkip(gym.Wrapper):
@@ -88,16 +91,11 @@ def env_test(env):
 
 
 def main():
-    script_dir = Path(__file__).parent
-    retro.data.Integrations.add_custom_path(
-        str(script_dir / "custom_integrations")
-    )
-
     def make_env():
         env = make_retro(
             game="MegaMan-v2-Nes",
             state="CutMan",
-            inttype=retro.data.Integrations.ALL,
+            inttype=retro.data.Integrations.CUSTOM_ONLY,
         )
         env = WarpFrame(env)
         env = StageRewardWrapper(env, stage=0)
@@ -119,9 +117,13 @@ def main():
         gae_lambda=0.95,
         clip_range=0.1,
         ent_coef=0.01,
-        verbose=1,
+        tensorboard_log="logs/cutman",
+        verbose=0,
+        seed=666,
+        device="cuda",
     )
     model.learn(
+        tb_log_name="full_cutman_wo_damage_punishment",
         total_timesteps=100_000_000,
         log_interval=1,
     )

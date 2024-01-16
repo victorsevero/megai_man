@@ -58,10 +58,10 @@ def get_collision_map(img, tiles, start, end):
                 img[x : x + 16, y : y + 16] = [255, 255, 255]
                 collision_map[x // 16, y // 16] = ""
 
-            if x // 16 == start[1] and y // 16 == start[0]:
+            if (y // 16, x // 16) == start:
                 img[x : x + 16, y : y + 16] = [0, 255, 0]
                 collision_map[x // 16, y // 16] = "s"
-            elif x // 16 == end[1] and y // 16 == end[0]:
+            elif (y // 16, x // 16) == end:
                 img[x : x + 16, y : y + 16] = [0, 0, 255]
                 collision_map[x // 16, y // 16] = "e"
 
@@ -73,11 +73,29 @@ def get_collision_map(img, tiles, start, end):
     return collision_map
 
 
-def wavefront_expansion(grid):
+def find_choke_points_string_grid(grid):
+    choke_points = []
+    rows, cols = grid.shape
+    for y in range(1, rows - 1):
+        for x in range(cols - 1):
+            if grid[y, x] == "" and grid[y, x + 1] == "":
+                if (grid[y - 1, x] != "" or grid[y - 1, x + 1] != "") and (
+                    grid[y + 1, x] != "" or grid[y + 1, x + 1] != ""
+                ):
+                    choke_points.append(((y, x), (y, x + 1)))
+    return choke_points
+
+
+def wavefront_expansion(grid, allow_chokepoints=False):
     end_point = np.argwhere(grid == "e")[0]
     value_grid = np.zeros_like(grid, dtype=int)
 
-    queue = [end_point]
+    if not allow_chokepoints:
+        chokepoints = find_choke_points_string_grid(grid)
+    else:
+        chokepoints = []
+
+    queue = [(*end_point,)]
 
     # up, down, left, right
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -85,17 +103,24 @@ def wavefront_expansion(grid):
     while queue:
         current = queue.pop(0)
         for dir_x, dir_y in directions:
-            neighbor = current[0] + dir_x, current[1] + dir_y
+            neighbor = (current[0] + dir_x, current[1] + dir_y)
             if (
                 0 <= neighbor[0] < grid.shape[0]
                 and 0 <= neighbor[1] < grid.shape[1]
                 and grid[neighbor] in ("", "s")
                 and value_grid[neighbor] == 0
             ):
-                value_grid[neighbor] = value_grid[(*current,)] + 1
-                queue.append(neighbor)
+                # Check if current -> neighbor is a chokepoint
+                if allow_chokepoints or (
+                    not tuple(sorted((current, neighbor))) in chokepoints
+                ):
+                    value_grid[neighbor] = value_grid[current] + 1
+                    queue.append((*neighbor,))
 
-    value_grid[grid == "w"] = -1
+    # walls and chokepoints
+    value_grid[value_grid == 0] = -1
+    # fix end point
+    value_grid[grid == "e"] = 0
 
     return value_grid
 
@@ -129,7 +154,10 @@ if __name__ == "__main__":
     tiles = get_tiles(tiles_prefix)
     collision_map = get_collision_map(img, tiles, start, end)
     value_grid = wavefront_expansion(collision_map)
-    np.save("cutman.npy", value_grid)
+    np.save(
+        Path("custom_integrations/MegaMan-v2-Nes/") / "cutman.npy",
+        value_grid,
+    )
 
     custom_cmap = get_custom_cmap(value_grid.max())
     heatmap_arr = custom_cmap(value_grid, bytes=True)

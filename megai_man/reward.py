@@ -102,7 +102,7 @@ class StageReward:
 
     @staticmethod
     def _get_distance_map(stage):
-        path_dir = Path("custom_integrations/MegaMan-v2-Nes")
+        path_dir = Path(__file__).parent / "custom_integrations/MegaMan-v2-Nes"
 
         if stage == 0:
             filename = "cutman.npy"
