@@ -1,14 +1,8 @@
 {
-  "done": {
-    "variables": {
-      "health": {
-        "op": "zero"
-      }
-    }
-  },
   "actions": [
     [[], ["UP"], ["DOWN"]],
     [[], ["LEFT"], ["RIGHT"]],
-    [[], ["A"], ["B"], ["A", "B"]]
+    [[], ["A"]],
+    [[], ["B"]]
   ]
 }

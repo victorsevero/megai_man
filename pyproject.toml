@@ -17,6 +17,9 @@ isort = "^5.13.2"
 notebook = "^7.0.6"
 ipywidgets = "^8.1.1"
 seaborn = "^0.13.1"
+optuna = "^3.5.0"
+plotly = "^5.18.0"
+optuna-dashboard = "^0.14.0"
 
 [build-system]
 requires = ["poetry-core"]

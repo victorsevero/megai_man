@@ -155,7 +155,8 @@ if __name__ == "__main__":
     collision_map = get_collision_map(img, tiles, start, end)
     value_grid = wavefront_expansion(collision_map)
     np.save(
-        Path("custom_integrations/MegaMan-v2-Nes/") / "cutman.npy",
+        Path("megai_man/megai_man/custom_integrations/MegaMan-v2-Nes/")
+        / "cutman.npy",
         value_grid,
     )
 
