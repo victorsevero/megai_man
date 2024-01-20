@@ -51,12 +51,20 @@ class StageRewardWrapper(gym.RewardWrapper):
     # not quite frames: this wrapper is on top of stochastic frameskip
     MAX_NUMBER_OF_FRAMES_WITHOUT_IMPROVEMENT = 60 * 30  # fps * seconds
 
-    def __init__(self, env, stage=0, damage_punishment=True, damage_factor=1):
+    def __init__(
+        self,
+        env,
+        stage=0,
+        damage_punishment=True,
+        damage_factor=1,
+        truncate_if_no_improvement=True,
+    ):
         super().__init__(env)
         self.reward_calculator = StageReward(
             stage, damage_punishment, damage_factor
         )
         self.damage_factor = damage_factor
+        self.truncate_if_no_improvement = truncate_if_no_improvement
         # TODO: set self.reward_range?
         # self.min_distance = self.reward_calculator.min_distance
 
@@ -74,7 +82,9 @@ class StageRewardWrapper(gym.RewardWrapper):
             observation,
             self.reward(reward),
             terminated,
-            self.truncated(truncated),
+            self.truncated(truncated)
+            if self.truncate_if_no_improvement
+            else truncated,
             self.info(info),
         )
 
@@ -161,8 +171,6 @@ class StageReward:
         screen = data["screen"]
         screen_offset = self.screen_offset_map[screen]
 
-        # TODO: verify these numbers, I found a min_distance=376 that
-        # feels highly unlikely
         x = int(
             (self.SCREEN_WIDTH * screen_offset["x"] + data["x"])
             / self.TILE_SIZE
@@ -175,7 +183,8 @@ class StageReward:
         try:
             distance = self.distance_map[y][x]
         except IndexError:
-            distance = self.prev_distance
+            # out of bounds of the map, probably falling into a pit
+            distance = self.prev_distance + 1
 
         if distance < self.min_distance:
             self.min_distance = distance
@@ -186,11 +195,11 @@ class StageReward:
         if self.prev_distance == -1:
             distance_diff = 0
         else:
-            distance_diff = distance - self.prev_distance
+            distance_diff = self.prev_distance - distance
 
         self.prev_distance = distance
 
-        return -distance_diff
+        return distance_diff
 
     def boss_reward(self, data):
         boss_health = data["boss_health"]

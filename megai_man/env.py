@@ -27,6 +27,7 @@ def make_venv(
     sticky_prob=0.25,
     damage_terminate=False,
     damage_factor=1,
+    truncate_if_no_improvement=True,
     render_mode="human",
     record=False,
 ):
@@ -36,18 +37,19 @@ def make_venv(
             sticky_prob=sticky_prob,
             damage_terminate=damage_terminate,
             damage_factor=damage_factor,
+            truncate_if_no_improvement=truncate_if_no_improvement,
             render_mode=render_mode,
             record=record,
         )
 
     if n_envs == 1:
-        env = DummyVecEnv([env_fn])
+        venv = DummyVecEnv([env_fn])
     else:
-        env = SubprocVecEnv([env_fn] * n_envs)
-    env = VecFrameStack(env, n_stack=4)
-    env = VecTransposeImage(env)
-    env = VecMonitor(env, info_keywords=("min_distance", "x", "y", "screen"))
-    return env
+        venv = SubprocVecEnv([env_fn] * n_envs)
+    venv = VecFrameStack(venv, n_stack=4)
+    venv = VecTransposeImage(venv)
+    venv = VecMonitor(venv, info_keywords=("min_distance", "x", "y", "screen"))
+    return venv
 
 
 def make_env(
@@ -55,6 +57,7 @@ def make_env(
     sticky_prob=0.25,
     damage_terminate=False,
     damage_factor=1,
+    truncate_if_no_improvement=True,
     render_mode="human",
     record=False,
 ):
@@ -74,6 +77,7 @@ def make_env(
         stage=0,
         damage_punishment=True,
         damage_factor=damage_factor,
+        truncate_if_no_improvement=truncate_if_no_improvement,
     )
     env = MegaManTerminationWrapper(env, damage_terminate=damage_terminate)
     env = WarpFrame(env)

@@ -109,13 +109,13 @@ def wavefront_expansion(grid, allow_chokepoints=False):
                 and 0 <= neighbor[1] < grid.shape[1]
                 and grid[neighbor] in ("", "s")
                 and value_grid[neighbor] == 0
+                and (
+                    allow_chokepoints
+                    or not tuple(sorted((current, neighbor))) in chokepoints
+                )
             ):
-                # Check if current -> neighbor is a chokepoint
-                if allow_chokepoints or (
-                    not tuple(sorted((current, neighbor))) in chokepoints
-                ):
-                    value_grid[neighbor] = value_grid[current] + 1
-                    queue.append((*neighbor,))
+                value_grid[neighbor] = value_grid[current] + 1
+                queue.append((*neighbor,))
 
     # walls and chokepoints
     value_grid[value_grid == 0] = -1

@@ -9,11 +9,12 @@ def test():
         state="CutMan",
         sticky_prob=0.0,
         damage_terminate=False,
+        truncate_if_no_improvement=False,
         render_mode="human",
         # record=".",
     )
 
-    model_name = "full_cutman"
+    model_name = "zoo_ecoef0.001_wo_sticky_wo_dmgterm_df1to28"
     model = PPO.load(f"models/{model_name}", env=venv)
 
     rewards, lengths = evaluate_policy(
