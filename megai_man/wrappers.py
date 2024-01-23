@@ -2,6 +2,8 @@ from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
+from gymnasium import spaces
+from stable_baselines3.common.vec_env import VecEnv, VecEnvWrapper
 
 
 class MegaManTerminationWrapper(gym.Wrapper):
@@ -49,7 +51,7 @@ class StickyActionWrapper(gym.Wrapper):
 
 class StageRewardWrapper(gym.RewardWrapper):
     # not quite frames: this wrapper is on top of stochastic frameskip
-    MAX_NUMBER_OF_FRAMES_WITHOUT_IMPROVEMENT = 60 * 30  # fps * seconds
+    MAX_NUMBER_OF_FRAMES_WITHOUT_IMPROVEMENT = 60 * 10  # fps * seconds
 
     def __init__(
         self,
@@ -77,7 +79,6 @@ class StageRewardWrapper(gym.RewardWrapper):
         observation, reward, terminated, truncated, info = self.env.step(
             action
         )
-        info["min_distance"] = self.reward_calculator.min_distance
         return (
             observation,
             self.reward(reward),
@@ -101,6 +102,7 @@ class StageRewardWrapper(gym.RewardWrapper):
 
     def info(self, info):
         info["min_distance"] = self.reward_calculator.min_distance
+        info["distance"] = self.reward_calculator.prev_distance
         return info
 
 
@@ -108,6 +110,7 @@ class StageReward:
     SCREEN_WIDTH = 256
     SCREEN_HEIGHT = 240
     TILE_SIZE = 16
+    MEGA_MAN_SPRITE_OFFSET_Y = 11  # distance from his RAM position to his feet
 
     SCREENS_OFFSETS_CUTMAN = [
         {"x": 0, "y": 8},
@@ -171,14 +174,14 @@ class StageReward:
         screen = data["screen"]
         screen_offset = self.screen_offset_map[screen]
 
-        x = int(
-            (self.SCREEN_WIDTH * screen_offset["x"] + data["x"])
-            / self.TILE_SIZE
-        )
-        y = int(
-            (self.SCREEN_HEIGHT * screen_offset["y"] + data["y"])
-            / self.TILE_SIZE
-        )
+        x = (
+            self.SCREEN_WIDTH * screen_offset["x"] + data["x"]
+        ) // self.TILE_SIZE
+        y = (
+            self.SCREEN_HEIGHT * screen_offset["y"]
+            + data["y"]
+            + self.MEGA_MAN_SPRITE_OFFSET_Y
+        ) // self.TILE_SIZE
 
         try:
             distance = self.distance_map[y][x]

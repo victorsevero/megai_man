@@ -1,7 +1,9 @@
 from pathlib import Path
+from time import time
 
 from PIL import Image
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.utils import safe_mean
 from wrappers import StageReward
 
 
@@ -26,15 +28,31 @@ class MinDistanceCallback(BaseCallback):
             len(self.model.ep_info_buffer) > 0
             and len(self.model.ep_info_buffer[0]) > 0
         ):
+            min_distances = [
+                ep_info["min_distance"]
+                for ep_info in self.model.ep_info_buffer
+            ]
             self.logger.record(
-                "rollout/min_distance",
-                min(
-                    [
-                        ep_info["min_distance"]
-                        for ep_info in self.model.ep_info_buffer
-                    ]
-                ),
+                "rollout/min_distance_min",
+                min(min_distances),
             )
+            self.logger.record(
+                "rollout/min_distance_mean",
+                safe_mean(min_distances),
+            )
+
+            final_distances = [
+                ep_info["distance"] for ep_info in self.model.ep_info_buffer
+            ]
+            self.logger.record(
+                "rollout/final_distance_min",
+                min(final_distances),
+            )
+            self.logger.record(
+                "rollout/final_distance_mean",
+                safe_mean(final_distances),
+            )
+
             if self.show_image:
                 # TODO: PLEASE REFACTOR THIS PLEASE
                 x = self.model.ep_info_buffer[-1]["x"]
@@ -74,3 +92,23 @@ class MinDistanceCallback(BaseCallback):
     #     )
     #     heatmap = draw_grid(heatmap)
     #     return heatmap
+
+
+class StopTrainingOnTimeBudget(BaseCallback):
+    def __init__(self, budget: int, verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.budget = budget
+
+    def on_training_start(self, locals_, globals_):
+        super().on_training_start(locals_, globals_)
+        self.start = time()
+
+    def _on_step(self) -> bool:
+        continue_training = (time() - self.start) < self.budget
+
+        if self.verbose >= 1 and not continue_training:
+            print(
+                f"Stopping training because time budget of {self.budget} seconds was reached."
+            )
+
+        return continue_training

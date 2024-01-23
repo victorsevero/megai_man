@@ -2,7 +2,7 @@ from pathlib import Path
 
 import retro
 from gymnasium.wrappers.time_limit import TimeLimit
-from stable_baselines3.common.atari_wrappers import WarpFrame
+from stable_baselines3.common.atari_wrappers import ClipRewardEnv, WarpFrame
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
     SubprocVecEnv,
@@ -46,9 +46,12 @@ def make_venv(
         venv = DummyVecEnv([env_fn])
     else:
         venv = SubprocVecEnv([env_fn] * n_envs)
-    venv = VecFrameStack(venv, n_stack=4)
+    venv = VecFrameStack(venv, n_stack=3)
     venv = VecTransposeImage(venv)
-    venv = VecMonitor(venv, info_keywords=("min_distance", "x", "y", "screen"))
+    venv = VecMonitor(
+        venv,
+        info_keywords=("distance", "min_distance", "x", "y", "screen"),
+    )
     return venv
 
 
@@ -71,7 +74,8 @@ def make_env(
     )
     if sticky_prob > 0:
         env = StickyActionWrapper(env, action_repeat_probability=sticky_prob)
-    env = TimeLimit(env, max_episode_steps=4500)
+    if not truncate_if_no_improvement:
+        env = TimeLimit(env, max_episode_steps=4500)
     env = StageRewardWrapper(
         env,
         stage=0,
@@ -81,4 +85,5 @@ def make_env(
     )
     env = MegaManTerminationWrapper(env, damage_terminate=damage_terminate)
     env = WarpFrame(env)
+    # env = ClipRewardEnv(env)
     return env

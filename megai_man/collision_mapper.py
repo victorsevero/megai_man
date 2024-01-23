@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
 
@@ -126,7 +127,7 @@ def wavefront_expansion(grid, allow_chokepoints=False):
 
 
 def get_custom_cmap(N):
-    colors = ["red", "yellow", "green"]
+    colors = ["red", "yellow", "green", "blue"]
     custom_cmap = LinearSegmentedColormap.from_list("ryg", colors, N=N)
     return custom_cmap
 
@@ -155,12 +156,12 @@ if __name__ == "__main__":
     collision_map = get_collision_map(img, tiles, start, end)
     value_grid = wavefront_expansion(collision_map)
     np.save(
-        Path("megai_man/megai_man/custom_integrations/MegaMan-v2-Nes/")
-        / "cutman.npy",
+        Path("megai_man/custom_integrations/MegaMan-v2-Nes/") / "cutman.npy",
         value_grid,
     )
 
-    custom_cmap = get_custom_cmap(value_grid.max())
+    # custom_cmap = get_custom_cmap(value_grid.max())
+    custom_cmap = plt.get_cmap("gist_rainbow", value_grid.max())
     heatmap_arr = custom_cmap(value_grid, bytes=True)
 
     # fix walls
