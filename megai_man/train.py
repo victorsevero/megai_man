@@ -47,9 +47,12 @@ def train():
     # 3-frames stacking; 84x84 warped frames; float32 = 4 bytes
     # obs size is n_envs * 3 * 84 * 84 * 4 = 677376
     # approximately 677kB per venv observation
+    n = 1
+    zoo_steps = 128
+    mini = 1
     model_kwargs = {
-        "n_steps": 8192,
-        "batch_size": 256,
+        "n_steps": n * zoo_steps,
+        "batch_size": n * zoo_steps * n_envs // mini,
         "learning_rate": 2.5e-4,
         "clip_range": 0.1,
         "vf_coef": 0.5,
@@ -74,14 +77,14 @@ def train():
         device="cuda",
         **model_kwargs,
     )
-    model_name = "optimized_nenvs16_framescaling"
+    model_name = f"zoo_{n}x_batch_mini{mini}"
     # model = PPO.load(
     #     f"models/{model_name}",
     #     env=venv,
     #     tensorboard_log="logs/cutman",
     # )
     model.learn(
-        total_timesteps=10_000_000,
+        total_timesteps=1_000_000,
         callback=[MinDistanceCallback()],
         log_interval=1,
         tb_log_name=model_name,

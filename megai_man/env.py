@@ -50,7 +50,7 @@ def make_venv(
     venv = VecTransposeImage(venv)
     venv = VecMonitor(
         venv,
-        info_keywords=("distance", "min_distance", "x", "y", "screen"),
+        info_keywords=("distance", "min_distance", "x", "y", "max_screen"),
     )
     return venv
 

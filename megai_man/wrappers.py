@@ -2,8 +2,6 @@ from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
-from gymnasium import spaces
-from stable_baselines3.common.vec_env import VecEnv, VecEnvWrapper
 
 
 class MegaManTerminationWrapper(gym.Wrapper):
@@ -103,6 +101,7 @@ class StageRewardWrapper(gym.RewardWrapper):
     def info(self, info):
         info["min_distance"] = self.reward_calculator.min_distance
         info["distance"] = self.reward_calculator.prev_distance
+        info["max_screen"] = self.reward_calculator.max_screen
         return info
 
 
@@ -151,6 +150,7 @@ class StageReward:
         self.boss_filled_health = False
         self.prev_boss_health = 28
         self.min_distance = self.distance_map.max()
+        self.max_screen = 0
         self.frames_since_last_improvement = 0
 
     def get_stage_reward(self, data):
@@ -172,6 +172,8 @@ class StageReward:
             return 0
 
         screen = data["screen"]
+        if screen > self.max_screen:
+            self.max_screen = screen
         screen_offset = self.screen_offset_map[screen]
 
         x = (
@@ -188,6 +190,10 @@ class StageReward:
         except IndexError:
             # out of bounds of the map, probably falling into a pit
             distance = self.prev_distance + 1
+
+        # some tiles were incorrectly mapped to -1, let's hope this is enough
+        if distance == -1:
+            distance = self.prev_distance
 
         if distance < self.min_distance:
             self.min_distance = distance

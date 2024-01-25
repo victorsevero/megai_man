@@ -52,6 +52,15 @@ class MinDistanceCallback(BaseCallback):
                 "rollout/final_distance_mean",
                 safe_mean(final_distances),
             )
+            self.logger.record(
+                "rollout/max_screen",
+                max(
+                    [
+                        ep_info["max_screen"]
+                        for ep_info in self.model.ep_info_buffer
+                    ]
+                ),
+            )
 
             if self.show_image:
                 # TODO: PLEASE REFACTOR THIS PLEASE

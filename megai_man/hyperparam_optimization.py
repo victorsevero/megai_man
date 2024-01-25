@@ -19,7 +19,7 @@ def sample_params(trial: optuna.Trial, n_envs: int, n_steps: int):
     )
     batch_size = 2**batch_size_exp
     learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)
-    clip_range = trial.suggest_categorical("clip_range", [0.1, 0.2, 0.3])
+    clip_range = trial.suggest_float("clip_range", 0.1, 0.3, step=0.1)
     vf_coef = trial.suggest_float("vf_coef", 0.0, 1.0)
     ent_coef = trial.suggest_float("ent_coef", 1e-8, 1e-1, log=True)
     gae_lambda = trial.suggest_float("gae_lambda", 0.8, 1.0, log=True)
@@ -80,7 +80,7 @@ def model_name_from(kwargs: dict):
 def optimizer(tensorboard_log: str, sample_fn, timesteps_per_trial=1_000_000):
     def optimize_agent(trial):
         n_envs = 8
-        n_steps = 8192
+        n_steps = 1024
         sticky_prob = 0.0
         damage_terminate = False
         damage_factor = 1 / 10
@@ -149,13 +149,16 @@ def tune(sample_fn, name, n_trials=500, timesteps_per_trial=1_000_000):
 
     n_trials -= len([x for x in study.trials if x.state.name == "COMPLETE"])
 
-    study.optimize(
-        optimizer(f"logs/{name}", sample_fn, timesteps_per_trial),
-        n_trials=n_trials,
-        n_jobs=1,
-        gc_after_trial=True,
-        show_progress_bar=True,
-    )
+    if n_trials:
+        study.optimize(
+            optimizer(f"logs/{name}", sample_fn, timesteps_per_trial),
+            n_trials=n_trials,
+            n_jobs=1,
+            gc_after_trial=True,
+            show_progress_bar=True,
+        )
+    else:
+        print("Total trials already finished.")
 
     with open(f"{name}_opt.yml", "w") as fp:
         yaml.safe_dump(study.best_params, fp)

@@ -8,14 +8,25 @@ from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
 
 
-def get_tiles_paths(prefix):
+def get_wall_tiles_paths(prefix):
     dir_path = "images/tiles"
     paths = os.listdir("images/tiles")
     paths = [
         str(Path(dir_path) / path)
         for path in paths
         if path.startswith(prefix)
-        and not path.endswith(("-s.png", "-full.png"))
+        and not path.endswith(("-l.png", "-full.png"))
+    ]
+    return sorted(paths)
+
+
+def get_ladder_tiles_paths(prefix):
+    dir_path = "images/tiles"
+    paths = os.listdir("images/tiles")
+    paths = [
+        str(Path(dir_path) / path)
+        for path in paths
+        if path.startswith(prefix) and ("-l" in path)
     ]
     return sorted(paths)
 
@@ -28,37 +39,50 @@ def exact_match(img1, img2):
 
 
 def get_tiles(prefix):
-    tiles = []
-    for tile_path in get_tiles_paths(prefix):
+    wall_tiles = []
+    for tile_path in get_wall_tiles_paths(prefix):
         tile = cv2.imread(tile_path)
         w, h = tile.shape[1::-1]
         assert w == h == 16, f"{tile_path} is not 16x16"
-        tiles.append(tile)
-    return tiles
+        wall_tiles.append(tile)
+
+    ladder_tiles = []
+    for tile_path in get_ladder_tiles_paths(prefix):
+        tile = cv2.imread(tile_path)
+        w, h = tile.shape[1::-1]
+        assert w == h == 16, f"{tile_path} is not 16x16"
+        ladder_tiles.append(tile)
+    return wall_tiles, ladder_tiles
 
 
-def get_collision_map(img, tiles, start, end):
+def get_collision_map(img, wall_tiles, ladder_tiles, start, end):
     width = img.shape[1]
     height = img.shape[0]
-    i = 0
-    locs = []
     collision_map = np.empty((height // 16, width // 16), dtype=str)
     collision_map[:, :] = "w"
 
     for x in range(0, height, 16):
         for y in range(0, width, 16):
             cropped_tile = img[x : x + 16, y : y + 16]
-            match = False
-            for tile in tiles:
+            wall_match = False
+            for tile in wall_tiles:
                 if exact_match(tile, cropped_tile):
-                    i += 1
-                    locs.append((x, y))
                     img[x : x + 16, y : y + 16] = [0, 0, 0]
-                    match = True
-            if not match and np.any(cropped_tile):
+                    wall_match = True
+                    break
+
+            if not wall_match:
+                ladder_match = False
+                for tile in ladder_tiles:
+                    if exact_match(tile, cropped_tile):
+                        img[x : x + 16, y : y + 16] = [127, 127, 127]
+                        collision_map[x // 16, y // 16] = "l"
+                        ladder_match = True
+                        break
+
+            if not (wall_match or ladder_match) and np.any(cropped_tile):
                 img[x : x + 16, y : y + 16] = [255, 255, 255]
                 collision_map[x // 16, y // 16] = ""
-
             if (y // 16, x // 16) == start:
                 img[x : x + 16, y : y + 16] = [0, 255, 0]
                 collision_map[x // 16, y // 16] = "s"
@@ -66,33 +90,123 @@ def get_collision_map(img, tiles, start, end):
                 img[x : x + 16, y : y + 16] = [0, 0, 255]
                 collision_map[x // 16, y // 16] = "e"
 
-    # cv2.imshow("Result", img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
     cv2.imwrite("output.png", img)
-    print(f"Number of tiles found: {i}")
     return collision_map
 
 
-def find_choke_points_string_grid(grid):
+def find_chokepoints(grid):
+    valid = ("", "l")
     choke_points = []
     rows, cols = grid.shape
     for y in range(1, rows - 1):
         for x in range(cols - 1):
-            if grid[y, x] == "" and grid[y, x + 1] == "":
-                if (grid[y - 1, x] != "" or grid[y - 1, x + 1] != "") and (
-                    grid[y + 1, x] != "" or grid[y + 1, x + 1] != ""
+            if grid[y, x] in valid and grid[y, x + 1] in valid:
+                if (
+                    grid[y - 1, x] not in valid
+                    or grid[y - 1, x + 1] not in valid
+                ) and (
+                    grid[y + 1, x] not in valid
+                    or grid[y + 1, x + 1] not in valid
                 ):
                     choke_points.append(((y, x), (y, x + 1)))
     return choke_points
 
 
-def wavefront_expansion(grid, allow_chokepoints=False):
+def get_relative_height(grid, node):
+    node_y, node_x = node
+
+    if grid[node_y, node_x] == "w":
+        return -1
+    # TODO: if it still doesn't work, change mid-ladder heights
+    if grid[node_y, node_x] == "l":
+        return 0
+
+    height = 0
+    for y in range(node_y + 1, grid.shape[0]):
+        if grid[y, node_x] in ("w", "l"):
+            return height
+        height += 1
+
+    return height
+
+
+def height_map(grid):
+    value_grid = np.zeros_like(grid, dtype=int)
+    for y in range(grid.shape[0]):
+        for x in range(grid.shape[1]):
+            value_grid[y, x] = get_relative_height(grid, (y, x))
+    return value_grid
+
+
+def is_inside_NxN_square(node1, node2, N=3):
+    return (abs(node1[0] - node2[0]) <= N) and (abs(node1[1] - node2[1]) <= N)
+
+
+def is_neighborhood_close_enough(
+    current,
+    neighbor,
+    value_grid,
+    label_grid,
+    max_distance=3,
+):
+    neighbor_y, neighbor_x = neighbor
+
+    y_range = [neighbor_y, neighbor_y + max_distance + 1]
+    y_range = [max(min(y, value_grid.shape[0]), 0) for y in y_range]
+    x_range = [neighbor_x - max_distance, neighbor_x + max_distance + 1]
+    x_range = [max(min(x, value_grid.shape[1]), 0) for x in x_range]
+    for y in range(*y_range):
+        for x in range(*x_range):
+            if value_grid[y, x] != 0:
+                continue
+            if label_grid[y, x] != "":
+                continue
+            if (y, x) == neighbor:
+                continue
+            # floor_y = y + get_relative_height(label_grid, (y, x))
+            # if is_inside_NxN_square((floor_y, x), current, N=3):
+            #     return True
+            if (
+                is_inside_NxN_square((y, x), current, N=3)
+                and get_relative_height(label_grid, (y, x)) == 0
+            ):
+                return True
+
+    return False
+
+
+def is_valid_path(current, neighbor, value_grid, label_grid):
+    max_distance = 3
+    current_y = current[0]
+    neighbor_y = neighbor[0]
+    neighbor_height = get_relative_height(label_grid, neighbor)
+
+    # (current[0] == 117) and (current[1] == 58) and (neighbor[0] == 118) and (neighbor[1] == 58)
+    if current_y > neighbor_y:
+        return True
+    if (current_y < neighbor_y) and (neighbor_height < max_distance):
+        return True
+    if neighbor_height == 0:
+        return True
+    # if neighbor_height > max_distance:
+    # return False
+    if is_neighborhood_close_enough(
+        current,
+        neighbor,
+        value_grid,
+        label_grid,
+        max_distance,
+    ):
+        return True
+    return False
+
+
+def wavefront_expansion(grid, allow_chokepoints=False, allow_any_jump=False):
     end_point = np.argwhere(grid == "e")[0]
     value_grid = np.zeros_like(grid, dtype=int)
 
     if not allow_chokepoints:
-        chokepoints = find_choke_points_string_grid(grid)
+        chokepoints = find_chokepoints(grid)
     else:
         chokepoints = []
 
@@ -108,11 +222,15 @@ def wavefront_expansion(grid, allow_chokepoints=False):
             if (
                 0 <= neighbor[0] < grid.shape[0]
                 and 0 <= neighbor[1] < grid.shape[1]
-                and grid[neighbor] in ("", "s")
+                and grid[neighbor] in ("", "s", "l")
                 and value_grid[neighbor] == 0
                 and (
                     allow_chokepoints
                     or not tuple(sorted((current, neighbor))) in chokepoints
+                )
+                and (
+                    allow_any_jump
+                    or is_valid_path(current, neighbor, value_grid, grid)
                 )
             ):
                 value_grid[neighbor] = value_grid[current] + 1
@@ -133,7 +251,6 @@ def get_custom_cmap(N):
 
 
 def draw_grid(img):
-    # inefficient
     arr = np.array(img)
     for x in range(arr.shape[0]):
         for y in range(arr.shape[1]):
@@ -152,8 +269,14 @@ if __name__ == "__main__":
     assert (
         img.shape[0] % 16 == 0 and img.shape[1] % 16 == 0
     ), f"{img_path} is not made of 16x16 tiles"
-    tiles = get_tiles(tiles_prefix)
-    collision_map = get_collision_map(img, tiles, start, end)
+    wall_tiles, ladder_tiles = get_tiles(tiles_prefix)
+    collision_map = get_collision_map(
+        img,
+        wall_tiles,
+        ladder_tiles,
+        start,
+        end,
+    )
     value_grid = wavefront_expansion(collision_map)
     np.save(
         Path("megai_man/custom_integrations/MegaMan-v2-Nes/") / "cutman.npy",
