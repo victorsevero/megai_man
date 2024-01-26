@@ -49,7 +49,7 @@ def train():
     # approximately 677kB per venv observation
     n = 1
     zoo_steps = 128
-    mini = 1
+    mini = 4
     model_kwargs = {
         "n_steps": n * zoo_steps,
         "batch_size": n * zoo_steps * n_envs // mini,
@@ -67,30 +67,29 @@ def train():
             },
         },
     }
-
-    model = PPO(
-        policy="CnnPolicy",
-        env=venv,
-        tensorboard_log="logs/cutman",
-        verbose=0,
-        seed=666,
-        device="cuda",
-        **model_kwargs,
-    )
-    model_name = f"zoo_{n}x_batch_mini{mini}"
-    # model = PPO.load(
-    #     f"models/{model_name}",
+    # model = PPO(
+    #     policy="CnnPolicy",
     #     env=venv,
     #     tensorboard_log="logs/cutman",
+    #     verbose=0,
+    #     seed=666,
+    #     device="cuda",
+    #     **model_kwargs,
     # )
+    model_name = f"zoo_{n}x_batch_mini{mini}_envfix3"
+    model = PPO.load(
+        f"models/{model_name}",
+        env=venv,
+        tensorboard_log="logs/cutman",
+    )
     model.learn(
-        total_timesteps=1_000_000,
+        total_timesteps=16_000_000,
         callback=[MinDistanceCallback()],
         log_interval=1,
         tb_log_name=model_name,
         reset_num_timesteps=False,
     )
-    # model.save(f"models/{model_name}.zip")
+    model.save(f"models/{model_name}.zip")
 
 
 if __name__ == "__main__":

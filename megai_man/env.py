@@ -84,6 +84,7 @@ def make_env(
         truncate_if_no_improvement=truncate_if_no_improvement,
     )
     env = MegaManTerminationWrapper(env, damage_terminate=damage_terminate)
+    # env = WarpFrame(env, 126, 126)
     env = WarpFrame(env)
     # env = ClipRewardEnv(env)
     return env

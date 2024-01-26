@@ -16,6 +16,8 @@ def evaluate_policy_details(model, env):
         current_length += 1
         print(f"Action: {action}")
         print(f"Reward: {rewards[0]}")
+        if "terminal_observation" in infos[0]:
+            del infos[0]["terminal_observation"]
         print(f"Infos: {infos[0]}\n")
     print()
 
@@ -31,7 +33,7 @@ def test():
         # record=".",
     )
 
-    model_name = "optimized_nenvs16"
+    model_name = "zoo_1x_batch_mini4_envfix3"
     model = PPO.load(f"models/{model_name}", env=venv)
 
     # rewards, lengths = evaluate_policy(

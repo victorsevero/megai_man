@@ -7,6 +7,9 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
 
+# arbitraty high level for inifinite pits
+INFINITE_PIT_HEIGHT = 1_000
+
 
 def get_wall_tiles_paths(prefix):
     dir_path = "images/tiles"
@@ -127,7 +130,7 @@ def get_relative_height(grid, node):
             return height
         height += 1
 
-    return height
+    return INFINITE_PIT_HEIGHT
 
 
 def height_map(grid):
@@ -181,10 +184,12 @@ def is_valid_path(current, neighbor, value_grid, label_grid):
     neighbor_y = neighbor[0]
     neighbor_height = get_relative_height(label_grid, neighbor)
 
-    # (current[0] == 117) and (current[1] == 58) and (neighbor[0] == 118) and (neighbor[1] == 58)
+    # I should really just return the conditions themselves but meh
+    if neighbor_height == INFINITE_PIT_HEIGHT:
+        return True
     if current_y > neighbor_y:
         return True
-    if (current_y < neighbor_y) and (neighbor_height < max_distance):
+    if (current_y < neighbor_y) and ((neighbor_height < max_distance)):
         return True
     if neighbor_height == 0:
         return True
@@ -289,6 +294,8 @@ if __name__ == "__main__":
 
     # fix walls
     heatmap_arr[value_grid == -1] = (0, 0, 0, 255)
+    # fix ladders
+    heatmap_arr[collision_map == "l"] = (0x42, 0x28, 0x0E, 255)
 
     heatmap = Image.fromarray(heatmap_arr, mode="RGBA")
     heatmap = heatmap.resize(

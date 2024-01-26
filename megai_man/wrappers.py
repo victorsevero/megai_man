@@ -168,12 +168,14 @@ class StageReward:
         return reward
 
     def wavefront_expansion_reward(self, data):
-        if data["camera_state"] != 0:
-            return 0
-
         screen = data["screen"]
         if screen > self.max_screen:
             self.max_screen = screen
+
+        # vertically moving to a new screen, everything freezes
+        if data["camera_state"] == 64:
+            return 0
+
         screen_offset = self.screen_offset_map[screen]
 
         x = (
