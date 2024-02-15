@@ -1,7 +1,5 @@
-import numpy as np
 from env import make_venv
-from stable_baselines3 import PPO
-from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3 import DQN
 
 
 def evaluate_policy_details(model, env):
@@ -29,21 +27,13 @@ def test():
         sticky_prob=0.0,
         damage_terminate=False,
         truncate_if_no_improvement=True,
+        action_space="discrete",
         render_mode="human",
         record=".",
     )
 
-    model_name = "envfix4_nsteps1024"
-    model = PPO.load(f"models/{model_name}", env=venv)
-
-    # rewards, lengths = evaluate_policy(
-    #     model=model,
-    #     env=venv,
-    #     n_eval_episodes=1,
-    #     deterministic=True,
-    #     return_episode_rewards=True,
-    # )
-    # print(f"Episode length: {lengths[0]}; Episode reward: {rewards[0]}")
+    model_name = "dqn_zoo_envfix4"
+    model = DQN.load(f"models/{model_name}", env=venv)
 
     evaluate_policy_details(model, venv)
 

@@ -191,7 +191,7 @@ class StageReward:
             distance = self.distance_map[y][x]
         except IndexError:
             # out of bounds of the map, probably falling into a pit
-            distance = self.prev_distance + 1
+            distance = self.prev_distance
 
         # some tiles were incorrectly mapped to -1, let's hope this is enough
         if distance == -1:

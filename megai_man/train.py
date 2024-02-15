@@ -47,43 +47,35 @@ def train():
     # 3-frames stacking; 84x84 warped frames; float32 = 4 bytes
     # obs size is n_envs * 3 * 84 * 84 * 4 = 677376
     # approximately 677kB per venv observation
-    n = 1
+    n = 8
     zoo_steps = 128
-    mini = 4
+    mini = 1
     model_kwargs = {
         "n_steps": n * zoo_steps,
         "batch_size": n * zoo_steps * n_envs // mini,
         "learning_rate": 2.5e-4,
         "clip_range": 0.1,
         "vf_coef": 0.5,
-        "ent_coef": 0.01,
-        "gae_lambda": 0.95,
+        "ent_coef": 1e-2,
         "n_epochs": 4,
-        "gamma": 0.99,
-        "max_grad_norm": 0.5,
-        "policy_kwargs": {
-            "features_extractor_kwargs": {
-                "features_dim": 512,
-            },
-        },
     }
-    # model = PPO(
-    #     policy="CnnPolicy",
-    #     env=venv,
-    #     tensorboard_log="logs/cutman",
-    #     verbose=0,
-    #     seed=666,
-    #     device="cuda",
-    #     **model_kwargs,
-    # )
-    model_name = f"zoo_{n}x_batch_mini{mini}_envfix3"
-    model = PPO.load(
-        f"models/{model_name}",
+    model = PPO(
+        policy="CnnPolicy",
         env=venv,
         tensorboard_log="logs/cutman",
+        verbose=0,
+        seed=666,
+        device="cuda",
+        **model_kwargs,
     )
+    model_name = f"envfix4_nsteps1024"
+    # model = PPO.load(
+    #     f"models/{model_name}",
+    #     env=venv,
+    #     tensorboard_log="logs/cutman",
+    # )
     model.learn(
-        total_timesteps=16_000_000,
+        total_timesteps=10_000_000,
         callback=[MinDistanceCallback()],
         log_interval=1,
         tb_log_name=model_name,

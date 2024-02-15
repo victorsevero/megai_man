@@ -28,6 +28,7 @@ def make_venv(
     damage_terminate=False,
     damage_factor=1,
     truncate_if_no_improvement=True,
+    action_space="multi_discrete",
     render_mode="human",
     record=False,
 ):
@@ -38,6 +39,7 @@ def make_venv(
             damage_terminate=damage_terminate,
             damage_factor=damage_factor,
             truncate_if_no_improvement=truncate_if_no_improvement,
+            action_space=action_space,
             render_mode=render_mode,
             record=record,
         )
@@ -61,14 +63,23 @@ def make_env(
     damage_terminate=False,
     damage_factor=1,
     truncate_if_no_improvement=True,
+    action_space="multi_discrete",
     render_mode="human",
     record=False,
 ):
+    if action_space == "multi_discrete":
+        use_restricted_actions = retro.Actions.MULTI_DISCRETE
+    elif action_space == "filtered":
+        use_restricted_actions = retro.Actions.FILTERED
+    elif action_space == "discrete":
+        use_restricted_actions = retro.Actions.DISCRETE
+    else:
+        raise ValueError(f"Invalid {action_space}")
     env = retro.make(
         game="MegaMan-v2-Nes",
         state=state,
         inttype=retro.data.Integrations.CUSTOM_ONLY,
-        use_restricted_actions=retro.Actions.MULTI_DISCRETE,
+        use_restricted_actions=use_restricted_actions,
         render_mode=render_mode,
         record=record,
     )
