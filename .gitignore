@@ -169,3 +169,8 @@ rom.sfc
 
 # TensorBoard logs
 /logs/
+
+/*.png
+
+# Movie files
+/*.bk2

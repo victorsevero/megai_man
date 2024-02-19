@@ -1,10 +1,10 @@
 from callbacks import MinDistanceCallback
 from env import make_venv
-from stable_baselines3 import DQN
+from stable_baselines3 import PPO
 
 
 def train():
-    n_envs = 1
+    n_envs = 8
     venv = make_venv(
         n_envs=n_envs,
         state="CutMan",
@@ -12,37 +12,35 @@ def train():
         damage_terminate=False,
         damage_factor=1 / 10,
         truncate_if_no_improvement=True,
-        obs_space="screen",
-        action_space="discrete",
+        obs_space="ram",
         render_mode=None,
     )
+    n_steps = 2048
+    mini = 1
     model_kwargs = {
-        "buffer_size": 100_000,
+        "n_steps": n_steps,
+        "batch_size": n_steps * n_envs // mini,
         "learning_rate": 1e-4,
-        "batch_size": 32,
-        "learning_starts": 100_000,
-        "target_update_interval": 1000,
-        "train_freq": 4,
-        "gradient_steps": 1,
-        "exploration_fraction": 0.1,
-        "exploration_final_eps": 1e-2,
+        "clip_range": 0.2,
+        "vf_coef": 0.5,
+        "ent_coef": 1e-2,
+        "n_epochs": 10,
     }
-    model = DQN(
-        policy="CnnPolicy",
-        # policy="MlpPolicy",
-        env=venv,
-        # tensorboard_log="logs/cutman",
-        verbose=0,
-        seed=666,
-        device="cuda",
-        **model_kwargs,
-    )
-    model_name = "dqn_small_screen"
-    # model = DQN.load(
-    #     f"models/{model_name}",
+    # model = PPO(
+    #     policy="MlpPolicy",
     #     env=venv,
     #     tensorboard_log="logs/cutman",
+    #     verbose=0,
+    #     seed=666,
+    #     device="cuda",
+    #     **model_kwargs,
     # )
+    model_name = f"envfix4_ram_entropy"
+    model = PPO.load(
+        f"models/{model_name}",
+        env=venv,
+        tensorboard_log="logs/cutman",
+    )
     model.learn(
         total_timesteps=10_000_000,
         callback=[MinDistanceCallback()],

@@ -27,12 +27,13 @@ def test():
         sticky_prob=0.0,
         damage_terminate=False,
         truncate_if_no_improvement=True,
+        obs_space="ram",
         action_space="discrete",
         render_mode="human",
         record=".",
     )
 
-    model_name = "dqn_zoo_envfix4"
+    model_name = "dqn_envfix4_ram"
     model = DQN.load(f"models/{model_name}", env=venv)
 
     evaluate_policy_details(model, venv)

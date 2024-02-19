@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import cv2
 import gymnasium as gym
 import numpy as np
+from gymnasium import spaces
 
 
 class MegaManTerminationWrapper(gym.Wrapper):
@@ -45,6 +47,78 @@ class StickyActionWrapper(gym.Wrapper):
         if self.np_random.random() >= self.action_repeat_probability:
             self._sticky_action = action
         return self.env.step(self._sticky_action)
+
+
+class WarpFrame(gym.Wrapper):
+    def __init__(
+        self,
+        env: gym.Env,
+        width: int = 84,
+        height: int = 84,
+        crop: bool = True,
+    ):
+        super().__init__(env)
+        self.width = width
+        self.height = height
+        self.crop = crop
+        assert isinstance(
+            env.observation_space, spaces.Box
+        ), f"Expected Box space, got {env.observation_space}"
+
+        self.observation_space = spaces.Box(
+            low=0,
+            high=255,
+            shape=(self.height, self.width, 1),
+            dtype=env.observation_space.dtype,
+        )
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        return (
+            self.observation(obs, info),
+            reward,
+            terminated,
+            truncated,
+            info,
+        )
+
+    def reset(self, *, seed=None, options=None):
+        obs, info = self.env.reset(seed=seed, options=options)
+        return self.observation(obs, info), info
+
+    def observation(self, obs, info):
+        obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+
+        if self.crop:
+            obs_height, obs_width = obs.shape
+            y = info["y"]
+            x_camera_offset = (
+                info["camera_screen"] * obs_width + info["camera_x"]
+            )
+            x = info["screen"] * obs_width + info["x"] - x_camera_offset
+
+            # offsets to better centralize cropping area on Mega Man
+            x -= 9
+            y -= 7
+
+            # so we don't mess up with cropping out of screen
+            x = min(max(x, self.width), obs_width - self.width)
+            y = min(max(y, self.height), obs_height - self.height)
+
+            # obs = cv2.rectangle(obs, (x - 5, y - 5), (x + 5, y + 5), (0, 0, 0))
+
+            obs_ = obs[
+                y - self.height : y + self.height,
+                x - self.width : x + self.width,
+            ]
+
+        obs = cv2.resize(
+            obs_,
+            (self.width, self.height),
+            interpolation=cv2.INTER_AREA,
+        )
+
+        return obs[:, :, None]
 
 
 class StageRewardWrapper(gym.RewardWrapper):
@@ -102,6 +176,12 @@ class StageRewardWrapper(gym.RewardWrapper):
         info["min_distance"] = self.reward_calculator.min_distance
         info["distance"] = self.reward_calculator.prev_distance
         info["max_screen"] = self.reward_calculator.max_screen
+        info["x"] = self.unwrapped.data["x"]
+        info["y"] = self.unwrapped.data["y"]
+        info["screen"] = self.unwrapped.data["screen"]
+        info["camera_x"] = self.unwrapped.data["camera_x"]
+        info["camera_y"] = self.unwrapped.data["camera_y"]
+        info["camera_screen"] = self.unwrapped.data["camera_screen"]
         return info
 
 
@@ -172,6 +252,7 @@ class StageReward:
         if screen > self.max_screen:
             self.max_screen = screen
 
+        # TODO: camera Y position is probably a better variable for this
         # vertically moving to a new screen, everything freezes
         if data["camera_state"] == 64:
             return 0
@@ -233,7 +314,7 @@ class StageReward:
             filename = "cutman.npy"
         else:
             # TODO: add other stages
-            raise ValueError()
+            raise ValueError(f"Invalid stage `{stage}`")
         return np.load(str(path_dir / filename))
 
     def _get_screen_offset_map(self, stage):

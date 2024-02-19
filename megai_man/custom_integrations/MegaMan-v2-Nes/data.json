@@ -31,6 +31,18 @@
     "stage": {
       "address": 49,
       "type": "|u1"
+    },
+    "camera_x": {
+      "address": 26,
+      "type": "|u1"
+    },
+    "camera_y": {
+      "address": 30,
+      "type": "|u1"
+    },
+    "camera_screen": {
+      "address": 27,
+      "type": "|u1"
     }
   }
 }

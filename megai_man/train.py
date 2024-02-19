@@ -1,3 +1,4 @@
+import torch
 from callbacks import MinDistanceCallback
 from env import make_venv
 from stable_baselines3 import PPO
@@ -63,6 +64,7 @@ def train():
         policy="CnnPolicy",
         env=venv,
         tensorboard_log="logs/cutman",
+        policy_kwargs={"optimizer_class": torch.optim.RMSprop},
         verbose=0,
         seed=666,
         device="cuda",
