@@ -24,15 +24,20 @@ class Debugger:
         self.desired_fps = 60
         self.clock = pygame.time.Clock()
         self._setup_screen()
+        self.debug_info_start_y = 10
+        self.debug_messages = []
 
     def _setup_screen(self):
         obs = self.env.reset()
         last_obs = obs[0, -1]
         height, width = last_obs.shape
         resize_factor = 10
-        text_area_width = 200
+        self.text_area_width = 200
         self.screen = pygame.display.set_mode(
-            (width * resize_factor + text_area_width, height * resize_factor)
+            (
+                width * resize_factor + self.text_area_width,
+                height * resize_factor,
+            )
         )
         self.width = width
         self.height = height
@@ -49,23 +54,53 @@ class Debugger:
         self.screen.blit(surface, (0, 0))
 
     def display_info(self, infos, rewards):
-        info_text_x = f"X: {infos.get('x', 'N/A')}"
-        info_text_y = f"Y: {infos.get('y', 'N/A')}"
-        reward_text = f"Reward: {rewards}"
+        self.debug_messages.append((infos, rewards))
 
-        info_surface_x = self.font.render(info_text_x, True, (255, 255, 255))
-        info_surface_y = self.font.render(info_text_y, True, (255, 255, 255))
-        reward_surface = self.font.render(reward_text, True, (255, 255, 255))
-
-        padding = 10
-        x_pos = self.width * self.resize_factor + padding
-        y_pos = padding
-
-        self.screen.blit(info_surface_x, (x_pos, y_pos))
-        self.screen.blit(info_surface_y, (x_pos, y_pos + self.font_size + 5))
-        self.screen.blit(
-            reward_surface, (x_pos, y_pos + 2 * (self.font_size + 5))
+        max_messages = (self.height * self.resize_factor) // (
+            self.font_size * 3 + 20
         )
+
+        self.debug_messages = self.debug_messages[-max_messages:]
+
+        debug_area_rect = pygame.Rect(
+            self.width * self.resize_factor,
+            0,
+            self.text_area_width,
+            self.height * self.resize_factor,
+        )
+        self.screen.fill((0, 0, 0), debug_area_rect)
+
+        y_pos = self.debug_info_start_y
+
+        for info, reward in self.debug_messages:
+            info_lines = [
+                f"X: {info.get('x', 'N/A')}",
+                f"Y: {info.get('y', 'N/A')}",
+                f"Reward: {reward}",
+            ]
+            self.render_text(
+                info_lines,
+                self.width * self.resize_factor + 10,
+                y_pos,
+            )
+            y_pos += self.font_size * len(info_lines) + 15
+
+    def render_text(self, text_lines, x, y):
+        box_height = self.font_size * len(text_lines) + 10
+        box_width = self.text_area_width - 10 - 1
+        background_color = (0, 0, 0)
+        text_color = (255, 255, 255)
+        border_color = (255, 255, 255)
+
+        box_rect = pygame.Rect(x, y, box_width, box_height)
+        pygame.draw.rect(self.screen, background_color, box_rect)
+
+        border_thickness = 2
+        pygame.draw.rect(self.screen, border_color, box_rect, border_thickness)
+
+        for i, line in enumerate(text_lines):
+            text_surface = self.font.render(line, True, text_color)
+            self.screen.blit(text_surface, (x + 5, y + 5 + i * self.font_size))
 
     def handle_events(self):
         paused = False
@@ -81,9 +116,7 @@ class Debugger:
                 ):
                     paused = not paused
                     if paused:
-                        self.display_pause_message(
-                            "Game Paused - Press SPACE to resume"
-                        )
+                        self.display_pause_message()
                     else:
                         return True
             if not paused:
@@ -91,19 +124,24 @@ class Debugger:
             self.clock.tick(10)
         return True
 
-    def display_pause_message(self, message):
+    def display_pause_message(self):
         overlay_rect = pygame.Rect(
-            left=0,
-            top=0,
-            width=self.width * self.resize_factor,
-            height=self.height * self.resize_factor,
+            0,
+            0,
+            self.width * self.resize_factor,
+            self.height * self.resize_factor,
         )
         overlay = pygame.Surface(
-            (overlay_rect.width, overlay_rect.height), pygame.SRCALPHA
+            (overlay_rect.width, overlay_rect.height),
+            pygame.SRCALPHA,
         )
         overlay.fill((0, 0, 0, 128))
 
-        pause_text = self.font.render(message, True, (255, 255, 255))
+        pause_text = self.font.render(
+            "Game Paused - Press SPACE to resume",
+            True,
+            (255, 255, 255),
+        )
         text_rect = pause_text.get_rect(
             center=(overlay_rect.width / 2, overlay_rect.height / 2)
         )
@@ -118,7 +156,7 @@ class Debugger:
     def run(self):
         obs = self.env.reset()
         done = False
-        rewards = [None]
+        rewards = ["N/A"]
         infos = [{}]
 
         while not done:
