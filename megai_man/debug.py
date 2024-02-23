@@ -1,10 +1,11 @@
 import numpy as np
 import pygame
 from env import make_venv
+from stable_baselines3 import PPO
 
 
 class Debugger:
-    def __init__(self):
+    def __init__(self, model=None, record=False):
         pygame.init()
         pygame.font.init()
         self.font_size = 24
@@ -18,15 +19,21 @@ class Debugger:
             obs_space="screen",
             action_space="multi_discrete",
             render_mode=None,
-            record=".",
+            record=record,
         )
-        self.action_mapper = ActionMapper(self.env)
+        self.retro_env = self.env.unwrapped.envs[0].unwrapped
+        self.model = model
+        if model is not None:
+            self.model = PPO.load(model, env=self.env)
+        self.action_mapper = ActionMapper(self.retro_env)
         self.desired_fps = 60
         self.clock = pygame.time.Clock()
         self._setup_screen()
         self.debug_info_start_y = 10
         self.debug_messages = []
-        self.box_text = "Step: {step}  X: {x}, Y: {y}\nReward: {reward}"
+        self.box_text = (
+            "Step: {step}, Action: {action}\nX: {x}, Y: {y}\nReward: {reward}"
+        )
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
 
@@ -73,8 +80,8 @@ class Debugger:
         surface = pygame.surfarray.make_surface(screen)
         self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
 
-    def display_info(self, infos, reward):
-        self.debug_messages.append((self.step, infos, reward))
+    def display_info(self, action, infos, reward):
+        self.debug_messages.append((self.step, action, infos, reward))
 
         max_messages = (self.height * self.resize_factor) // (
             self.font_size * self.n_lines + 2 * self.pad
@@ -92,9 +99,10 @@ class Debugger:
 
         y_pos = self.debug_info_start_y
 
-        for step, info, reward in self.debug_messages:
+        for step, action, info, reward in self.debug_messages:
             info_lines = self.box_text.format(
                 step=step,
+                action=action,
                 x=info.get("x", "N/A"),
                 y=info.get("y", "N/A"),
                 reward=reward,
@@ -188,6 +196,7 @@ class Debugger:
 
     def run(self):
         obs = self.env.reset()
+        buttons = ["N/A"]
         done = False
         rewards = ["N/A"]
         infos = [{}]
@@ -196,35 +205,37 @@ class Debugger:
         while not done:
             self.screen.fill((0, 0, 0))
             self.render_screen(obs[0, -1])
-            self.display_info(infos[0], rewards[0])
+            self.display_info(", ".join(buttons), infos[0], rewards[0])
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
 
             if not self.handle_events():
                 break
 
-            keys = pygame.key.get_pressed()
-            action, buttons = self.action_mapper.map_keys(keys)
+            if self.model is None:
+                keys = pygame.key.get_pressed()
+                action, buttons = self.action_mapper.map_keys(keys)
+            else:
+                action = self.model.predict(obs, deterministic=True)[0][0]
+                buttons = self.retro_env.get_action_meaning(action)
             obs, rewards, dones, infos = self.env.step([action])
             done = dones[0]
             self.step += 1
 
     def _get_screen(self):
-        return self.env.unwrapped.envs[0].unwrapped.img
+        return self.retro_env.img
 
 
 class ActionMapper:
     def __init__(self, env):
-        env_ = env.unwrapped.envs[0].unwrapped
-
-        sizes = env_.action_space.nvec
+        sizes = env.action_space.nvec
         ranges = [np.arange(size) for size in sizes]
         mesh = np.meshgrid(*ranges, indexing="ij")
         actions_arrs = np.stack(mesh, axis=-1).reshape(-1, len(sizes))
 
         self.actions = {}
         for action_arr in actions_arrs:
-            buttons = tuple(sorted(env_.get_action_meaning(action_arr)))
+            buttons = tuple(sorted(env.get_action_meaning(action_arr)))
             self.actions[buttons] = action_arr
 
     def map_keys(self, keys):
@@ -242,12 +253,13 @@ class ActionMapper:
         if keys[pygame.K_z]:
             buttons.append("B")
 
-        return self._map_action(buttons), buttons
+        return self.map_action(buttons), buttons
 
-    def _map_action(self, buttons):
+    def map_action(self, buttons):
         return self.actions[tuple(sorted(buttons))]
 
 
 if __name__ == "__main__":
-    debugger = Debugger()
+    model_name = "dummy"
+    debugger = Debugger(model=f"models/{model_name}")
     debugger.run()

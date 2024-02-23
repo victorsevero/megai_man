@@ -4,37 +4,8 @@ from env import make_venv
 from stable_baselines3 import PPO
 
 
-def model_name_from(kwargs: dict):
-    kwargs = kwargs.copy()
-    kwargs["features_dim"] = kwargs["policy_kwargs"][
-        "features_extractor_kwargs"
-    ]["features_dim"]
-    del kwargs["policy_kwargs"]
-
-    string = ""
-    for k, v in kwargs.items():
-        if k == "n_steps":
-            continue
-        if string:
-            string += "_"
-        prefix = "".join([x[0] for x in k.split("_")])
-        if k in [
-            "learning_rate",
-            "vf_coef",
-            "ent_coef",
-            "gae_lambda",
-            "max_grad_norm",
-        ]:
-            value = f"{v:.2e}"
-        else:
-            value = v
-        string += f"{prefix}{value}"
-
-    return string
-
-
 def train():
-    n_envs = 8
+    n_envs = 1
     venv = make_venv(
         n_envs=n_envs,
         state="CutMan",
@@ -42,6 +13,8 @@ def train():
         damage_terminate=False,
         damage_factor=1 / 10,
         truncate_if_no_improvement=True,
+        obs_space="screen",
+        action_space="multi_discrete",
         render_mode=None,
     )
     # use this as a guide of max n_steps possible:
@@ -63,21 +36,21 @@ def train():
     model = PPO(
         policy="CnnPolicy",
         env=venv,
-        tensorboard_log="logs/cutman",
+        # tensorboard_log="logs/cutman",
         policy_kwargs={"optimizer_class": torch.optim.RMSprop},
         verbose=0,
         seed=666,
         device="cuda",
         **model_kwargs,
     )
-    model_name = f"envfix4_nsteps1024"
+    model_name = f"dummy"
     # model = PPO.load(
     #     f"models/{model_name}",
     #     env=venv,
     #     tensorboard_log="logs/cutman",
     # )
     model.learn(
-        total_timesteps=10_000_000,
+        total_timesteps=n * zoo_steps * n_envs,
         callback=[MinDistanceCallback()],
         log_interval=1,
         tb_log_name=model_name,

@@ -25,7 +25,7 @@ retro.data.Integrations.add_custom_path(
 def make_venv(
     n_envs=8,
     state=retro.State.DEFAULT,
-    sticky_prob=0.25,
+    sticky_prob=0.0,
     damage_terminate=False,
     damage_factor=1,
     truncate_if_no_improvement=True,
