@@ -26,24 +26,34 @@ class Debugger:
         self._setup_screen()
         self.debug_info_start_y = 10
         self.debug_messages = []
+        self.box_text = "Step: {step}  X: {x}, Y: {y}\nReward: {reward}"
+        self.n_lines = len(self.box_text.split("\n"))
+        self.pad = 5
 
     def _setup_screen(self):
+        width, height = 240, 224
+        resize_factor = 5
+
         obs = self.env.reset()
         last_obs = obs[0, -1]
-        height, width = last_obs.shape
-        resize_factor = 10
-        self.text_area_width = 200
+        env_height, env_width = last_obs.shape
+
+        self.text_area_width = 400
         self.screen = pygame.display.set_mode(
             (
-                width * resize_factor + self.text_area_width,
+                env_width * resize_factor
+                + width * resize_factor
+                + self.text_area_width,
                 height * resize_factor,
             )
         )
+        self.env_width = env_width
+        self.env_height = env_height
         self.width = width
         self.height = height
         self.resize_factor = resize_factor
 
-    def render_observation(self, obs):
+    def render_screen(self, obs):
         last_obs_resized = np.repeat(
             np.repeat(obs, self.resize_factor, axis=0),
             self.resize_factor,
@@ -53,17 +63,27 @@ class Debugger:
         surface = pygame.surfarray.make_surface(last_obs_rgb)
         self.screen.blit(surface, (0, 0))
 
-    def display_info(self, infos, rewards):
-        self.debug_messages.append((infos, rewards))
+        screen = self._get_screen()
+        screen = np.repeat(
+            np.repeat(screen, self.resize_factor, axis=0),
+            self.resize_factor,
+            axis=1,
+        ).T
+        screen = np.transpose(screen, (1, 2, 0))
+        surface = pygame.surfarray.make_surface(screen)
+        self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
+
+    def display_info(self, infos, reward):
+        self.debug_messages.append((self.step, infos, reward))
 
         max_messages = (self.height * self.resize_factor) // (
-            self.font_size * 3 + 20
+            self.font_size * self.n_lines + 2 * self.pad
         )
 
         self.debug_messages = self.debug_messages[-max_messages:]
 
         debug_area_rect = pygame.Rect(
-            self.width * self.resize_factor,
+            (self.env_width + self.width) * self.resize_factor,
             0,
             self.text_area_width,
             self.height * self.resize_factor,
@@ -72,22 +92,25 @@ class Debugger:
 
         y_pos = self.debug_info_start_y
 
-        for info, reward in self.debug_messages:
-            info_lines = [
-                f"X: {info.get('x', 'N/A')}",
-                f"Y: {info.get('y', 'N/A')}",
-                f"Reward: {reward}",
-            ]
+        for step, info, reward in self.debug_messages:
+            info_lines = self.box_text.format(
+                step=step,
+                x=info.get("x", "N/A"),
+                y=info.get("y", "N/A"),
+                reward=reward,
+            ).split("\n")
+
             self.render_text(
                 info_lines,
-                self.width * self.resize_factor + 10,
+                (self.env_width + self.width) * self.resize_factor
+                + 2 * self.pad,
                 y_pos,
             )
-            y_pos += self.font_size * len(info_lines) + 15
+            y_pos += (self.font_size + self.pad) * len(info_lines)
 
     def render_text(self, text_lines, x, y):
-        box_height = self.font_size * len(text_lines) + 10
-        box_width = self.text_area_width - 10 - 1
+        box_height = self.font_size * len(text_lines) + 2 * self.pad
+        box_width = self.text_area_width - 2 * self.pad - 1
         background_color = (0, 0, 0)
         text_color = (255, 255, 255)
         border_color = (255, 255, 255)
@@ -100,7 +123,10 @@ class Debugger:
 
         for i, line in enumerate(text_lines):
             text_surface = self.font.render(line, True, text_color)
-            self.screen.blit(text_surface, (x + 5, y + 5 + i * self.font_size))
+            self.screen.blit(
+                text_surface,
+                (x + self.pad, y + i * self.font_size),
+            )
 
     def handle_events(self):
         paused = False
@@ -128,7 +154,7 @@ class Debugger:
         overlay_rect = pygame.Rect(
             0,
             0,
-            self.width * self.resize_factor,
+            (self.env_width + self.width) * self.resize_factor,
             self.height * self.resize_factor,
         )
         overlay = pygame.Surface(
@@ -143,13 +169,20 @@ class Debugger:
             (255, 255, 255),
         )
         text_rect = pause_text.get_rect(
-            center=(overlay_rect.width / 2, overlay_rect.height / 2)
+            center=(
+                self.env_width * self.resize_factor
+                + self.width * self.resize_factor / 2,
+                overlay_rect.height / 2,
+            )
         )
 
         self.screen.blit(overlay, overlay_rect.topleft)
         self.screen.blit(
             pause_text,
-            (overlay_rect.left + text_rect.x, overlay_rect.top + text_rect.y),
+            (
+                overlay_rect.left + text_rect.x,
+                overlay_rect.top + text_rect.y,
+            ),
         )
         pygame.display.flip()
 
@@ -158,10 +191,11 @@ class Debugger:
         done = False
         rewards = ["N/A"]
         infos = [{}]
+        self.step = 0
 
         while not done:
             self.screen.fill((0, 0, 0))
-            self.render_observation(obs[0, -1])
+            self.render_screen(obs[0, -1])
             self.display_info(infos[0], rewards[0])
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
@@ -173,11 +207,10 @@ class Debugger:
             action, buttons = self.action_mapper.map_keys(keys)
             obs, rewards, dones, infos = self.env.step([action])
             done = dones[0]
-            print(f"Action: {buttons}")
-            print(f"Reward: {rewards[0]}")
-            if "terminal_observation" in infos[0]:
-                del infos[0]["terminal_observation"]
-            print(f"Infos: {infos[0]}\n")
+            self.step += 1
+
+    def _get_screen(self):
+        return self.env.unwrapped.envs[0].unwrapped.img
 
 
 class ActionMapper:
@@ -198,11 +231,11 @@ class ActionMapper:
         buttons = []
         if keys[pygame.K_UP]:
             buttons.append("UP")
-        if keys[pygame.K_DOWN]:
+        elif keys[pygame.K_DOWN]:
             buttons.append("DOWN")
         if keys[pygame.K_LEFT]:
             buttons.append("LEFT")
-        if keys[pygame.K_RIGHT]:
+        elif keys[pygame.K_RIGHT]:
             buttons.append("RIGHT")
         if keys[pygame.K_x]:
             buttons.append("A")
