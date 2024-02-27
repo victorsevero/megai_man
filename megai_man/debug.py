@@ -1,12 +1,8 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import pygame
-import seaborn as sns
 import torch
 from env import make_venv
 from stable_baselines3 import PPO
-
-sns.set_theme()
 
 
 class Debugger:
@@ -15,6 +11,7 @@ class Debugger:
         pygame.font.init()
         self.font_size = 18
         self.font = pygame.font.SysFont("opensans", self.font_size)
+        self.small_font = pygame.font.SysFont("opensans", 12)
         frameskip = 1
         self.env = make_venv(
             n_envs=1,
@@ -22,6 +19,7 @@ class Debugger:
             sticky_prob=0.0,
             frameskip=frameskip,
             damage_terminate=False,
+            damage_factor=1 / 10,
             truncate_if_no_improvement=False,
             obs_space="screen",
             action_space="multi_discrete",
@@ -45,6 +43,7 @@ class Debugger:
         )
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
+        self.graph_color = (255, 255, 255)
 
     def _setup_screen(self):
         width, height = 240, 224
@@ -149,6 +148,148 @@ class Debugger:
                 (x + self.pad, y + i * self.font_size),
             )
 
+    # def display_plots(self):
+    #     if self.step % 10 == 0:
+    #         px = 1 / plt.rcParams["figure.dpi"]
+    #         size = (84 * self.resize_factor * px, 84 * self.resize_factor * px)
+    #         fig = plt.figure(figsize=size)
+    #         ax = fig.gca()
+    #         sns.lineplot(data=self.cum_rewards, ax=ax)
+    #         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+    #         ax.grid(False)
+    #         plt.title("Cumulative Rewards")
+    #         plt.tight_layout()
+
+    #         canvas = agg.FigureCanvasAgg(fig)
+    #         canvas.draw()
+    #         renderer = canvas.get_renderer()
+    #         raw_data = renderer.buffer_rgba()
+    #         size = canvas.get_width_height()
+
+    #         graph_surface = pygame.image.frombuffer(raw_data, size, "RGBA")
+    #         self.screen.blit(graph_surface, (0, 84 * self.resize_factor + 1))
+
+    def display_plots(self):
+        if len(self.cum_rewards) < 2:
+            return
+
+        window_size = 100
+        displayed_rewards = self.cum_rewards[-window_size:]
+        start_index = max(0, len(self.cum_rewards) - window_size)
+
+        left_margin = 30
+        bottom_margin = 20
+        top_margin = 10
+        right_margin = 10
+
+        graph_rect = pygame.Rect(
+            0,
+            84 * self.resize_factor + 1,
+            84 * self.resize_factor,
+            84 // 2 * self.resize_factor,
+        )
+        adjusted_rect = pygame.Rect(
+            graph_rect.left + left_margin,
+            graph_rect.top + top_margin,
+            graph_rect.width - (left_margin + right_margin),
+            graph_rect.height - (top_margin + bottom_margin),
+        )
+
+        self.screen.fill((0, 0, 0), graph_rect)
+        pygame.draw.line(
+            self.screen,
+            (128, 128, 128),
+            (adjusted_rect.left, adjusted_rect.bottom),
+            (adjusted_rect.right, adjusted_rect.bottom),
+        )
+        pygame.draw.line(
+            self.screen,
+            (128, 128, 128),
+            (adjusted_rect.left, adjusted_rect.top),
+            (adjusted_rect.left, adjusted_rect.bottom),
+        )
+
+        reward_range = max(displayed_rewards) - min(displayed_rewards) or 1
+
+        num_labels = 3
+        x_labels = [
+            str(i)
+            for i in range(
+                start_index,
+                start_index + len(displayed_rewards) + 1,
+                max(1, len(displayed_rewards) // (num_labels - 1)),
+            )
+        ]
+        y_label_values = np.linspace(
+            min(displayed_rewards),
+            max(displayed_rewards),
+            num=num_labels,
+        )
+
+        for i, label in enumerate(x_labels):
+            text_surface = self.small_font.render(
+                label,
+                True,
+                self.graph_color,
+            )
+            x_pos = (
+                adjusted_rect.left
+                + (i / (len(x_labels) - 1)) * adjusted_rect.width
+                - text_surface.get_width() / 2
+            )
+            self.screen.blit(text_surface, (x_pos, adjusted_rect.bottom + 5))
+
+        for value in y_label_values:
+            if reward_range < 5:
+                label = f"{value:0.1f}"
+            else:
+                label = f"{value:0.0f}"
+            text_surface = self.small_font.render(
+                label,
+                True,
+                self.graph_color,
+            )
+            text_y = (
+                adjusted_rect.bottom
+                - ((value - min(displayed_rewards)) / reward_range)
+                * adjusted_rect.height
+                - text_surface.get_height() / 2
+            )
+            self.screen.blit(
+                text_surface,
+                (adjusted_rect.left - text_surface.get_width() - 5, text_y),
+            )
+
+        for i in range(len(displayed_rewards) - 1):
+            start_pos = (
+                adjusted_rect.left
+                + (i / (len(displayed_rewards) - 1)) * adjusted_rect.width,
+                adjusted_rect.bottom
+                - (
+                    (displayed_rewards[i] - min(displayed_rewards))
+                    / reward_range
+                )
+                * adjusted_rect.height,
+            )
+            end_pos = (
+                adjusted_rect.left
+                + ((i + 1) / (len(displayed_rewards) - 1))
+                * adjusted_rect.width,
+                adjusted_rect.bottom
+                - (
+                    (displayed_rewards[i + 1] - min(displayed_rewards))
+                    / reward_range
+                )
+                * adjusted_rect.height,
+            )
+            pygame.draw.line(
+                self.screen,
+                self.graph_color,
+                start_pos,
+                end_pos,
+                2,
+            )
+
     def handle_events(self):
         paused = False
         while True:
@@ -214,11 +355,12 @@ class Debugger:
         vf = "N/A"
         done = False
         rewards = ["N/A"]
+        cum_reward = 0
+        self.cum_rewards = [cum_reward]
         infos = [{}]
         self.step = 0
 
         while not done:
-            self.screen.fill((0, 0, 0))
             self.render_screen(obs[0, -1])
             self.display_info(
                 ", ".join(buttons),
@@ -227,6 +369,7 @@ class Debugger:
                 infos[0],
                 rewards[0],
             )
+            self.display_plots()
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
 
@@ -243,6 +386,8 @@ class Debugger:
                 action_probs = self._get_action_probs(obs)
                 vf = self._get_model_vf(obs)
             obs, rewards, dones, infos = self.env.step([action])
+            cum_reward += rewards[0]
+            self.cum_rewards.append(cum_reward)
             done = dones[0]
             self.step += 1
 
@@ -259,18 +404,10 @@ class Debugger:
         ]
         # TODO: make this programatically, I'm too lazy for this right now
         probs = {
-            "B": {"N": probs[0][0], "Y": probs[0][1]},
-            "A": {"N": probs[3][0], "Y": probs[3][1]},
-            "HOR": {
-                "N": probs[2][0],
-                "L": probs[2][1],
-                "R": probs[2][2],
-            },
-            "VER": {
-                "N": probs[1][0],
-                "U": probs[1][1],
-                "D": probs[1][2],
-            },
+            "B": {"Y": probs[0][1], "N": probs[0][0]},
+            "A": {"Y": probs[3][1], "N": probs[3][0]},
+            "HOR": {"L": probs[2][1], "R": probs[2][2], "N": probs[2][0]},
+            "VER": {"U": probs[1][1], "D": probs[1][2], "N": probs[1][0]},
         }
         return self.dict_to_custom_string(probs)
 
