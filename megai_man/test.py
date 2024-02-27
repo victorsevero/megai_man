@@ -28,12 +28,13 @@ def test():
         state="CutMan",
         sticky_prob=0.0,
         damage_terminate=False,
+        damage_factor=1 / 10,
         truncate_if_no_improvement=True,
         render_mode="human",
         record=".",
     )
 
-    model_name = "envfix4_nsteps1024"
+    model_name = "envfix4_crop_nsteps1024_ec0.05"
     model = PPO.load(f"models/{model_name}", env=venv)
 
     # rewards, lengths = evaluate_policy(

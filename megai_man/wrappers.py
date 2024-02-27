@@ -49,6 +49,30 @@ class StickyActionWrapper(gym.Wrapper):
         return self.env.step(self._sticky_action)
 
 
+class FrameskipWrapper(gym.Wrapper):
+    def __init__(self, env: gym.Env, skip: int = 4):
+        super().__init__(env)
+        assert (
+            env.observation_space.dtype is not None
+        ), "No dtype specified for the observation space"
+        assert (
+            env.observation_space.shape is not None
+        ), "No shape defined for the observation space"
+        self._skip = skip
+
+    def step(self, action):
+        total_reward = 0.0
+        terminated = truncated = False
+        for _ in range(self._skip):
+            obs, reward, terminated, truncated, info = self.env.step(action)
+            done = terminated or truncated
+            total_reward += float(reward)
+            if done:
+                break
+
+        return obs, total_reward, terminated, truncated, info
+
+
 class WarpFrame(gym.Wrapper):
     def __init__(
         self,
@@ -105,8 +129,6 @@ class WarpFrame(gym.Wrapper):
             x = min(max(x, self.width), obs_width - self.width)
             y = min(max(y, self.height), obs_height - self.height)
 
-            # obs = cv2.rectangle(obs, (x - 5, y - 5), (x + 5, y + 5), (0, 0, 0))
-
             obs_ = obs[
                 y - self.height : y + self.height,
                 x - self.width : x + self.width,
@@ -122,12 +144,10 @@ class WarpFrame(gym.Wrapper):
 
 
 class StageRewardWrapper(gym.RewardWrapper):
-    # not quite frames: this wrapper is on top of stochastic frameskip
-    MAX_NUMBER_OF_FRAMES_WITHOUT_IMPROVEMENT = 60 * 10  # fps * seconds
-
     def __init__(
         self,
         env,
+        frameskip,
         stage=0,
         damage_punishment=True,
         damage_factor=1,
@@ -139,6 +159,8 @@ class StageRewardWrapper(gym.RewardWrapper):
         )
         self.damage_factor = damage_factor
         self.truncate_if_no_improvement = truncate_if_no_improvement
+        # max number of frames: NES' FPS * seconds // frameskip
+        self.max_number_of_frames_without_improvement = (60 * 10) // frameskip
         # TODO: set self.reward_range?
         # self.min_distance = self.reward_calculator.min_distance
 
@@ -169,7 +191,7 @@ class StageRewardWrapper(gym.RewardWrapper):
     def truncated(self, truncated):
         return truncated or (
             self.reward_calculator.frames_since_last_improvement
-            >= self.MAX_NUMBER_OF_FRAMES_WITHOUT_IMPROVEMENT
+            >= self.max_number_of_frames_without_improvement
         )
 
     def info(self, info):

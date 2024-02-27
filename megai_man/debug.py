@@ -1,19 +1,26 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pygame
+import seaborn as sns
+import torch
 from env import make_venv
 from stable_baselines3 import PPO
+
+sns.set_theme()
 
 
 class Debugger:
     def __init__(self, model=None, record=False):
         pygame.init()
         pygame.font.init()
-        self.font_size = 24
+        self.font_size = 18
         self.font = pygame.font.SysFont("opensans", self.font_size)
+        frameskip = 1
         self.env = make_venv(
             n_envs=1,
             state="CutMan",
             sticky_prob=0.0,
+            frameskip=frameskip,
             damage_terminate=False,
             truncate_if_no_improvement=False,
             obs_space="screen",
@@ -26,13 +33,15 @@ class Debugger:
         if model is not None:
             self.model = PPO.load(model, env=self.env)
         self.action_mapper = ActionMapper(self.retro_env)
-        self.desired_fps = 60
+        self.desired_fps = 60 // frameskip
         self.clock = pygame.time.Clock()
         self._setup_screen()
         self.debug_info_start_y = 10
         self.debug_messages = []
         self.box_text = (
-            "Step: {step}, Action: {action}\nX: {x}, Y: {y}\nReward: {reward}"
+            "Step: {step}, Action: {action}, Reward: {reward}, VF: {vf}\n"
+            "{probs}\n"
+            "X: {x}, Y: {y}\n"
         )
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
@@ -45,7 +54,7 @@ class Debugger:
         last_obs = obs[0, -1]
         env_height, env_width = last_obs.shape
 
-        self.text_area_width = 400
+        self.text_area_width = 800
         self.screen = pygame.display.set_mode(
             (
                 env_width * resize_factor
@@ -80,11 +89,13 @@ class Debugger:
         surface = pygame.surfarray.make_surface(screen)
         self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
 
-    def display_info(self, action, infos, reward):
-        self.debug_messages.append((self.step, action, infos, reward))
+    def display_info(self, action, probs, vf, infos, reward):
+        self.debug_messages.append(
+            (self.step, action, probs, vf, infos, reward)
+        )
 
         max_messages = (self.height * self.resize_factor) // (
-            self.font_size * self.n_lines + 2 * self.pad
+            (self.font_size + self.pad + 1) * self.n_lines
         )
 
         self.debug_messages = self.debug_messages[-max_messages:]
@@ -99,10 +110,12 @@ class Debugger:
 
         y_pos = self.debug_info_start_y
 
-        for step, action, info, reward in self.debug_messages:
+        for step, action, probs, vf, info, reward in self.debug_messages:
             info_lines = self.box_text.format(
                 step=step,
                 action=action,
+                probs=probs,
+                vf=vf,
                 x=info.get("x", "N/A"),
                 y=info.get("y", "N/A"),
                 reward=reward,
@@ -197,6 +210,8 @@ class Debugger:
     def run(self):
         obs = self.env.reset()
         buttons = ["N/A"]
+        action_probs = "N/A"
+        vf = "N/A"
         done = False
         rewards = ["N/A"]
         infos = [{}]
@@ -205,7 +220,13 @@ class Debugger:
         while not done:
             self.screen.fill((0, 0, 0))
             self.render_screen(obs[0, -1])
-            self.display_info(", ".join(buttons), infos[0], rewards[0])
+            self.display_info(
+                ", ".join(buttons),
+                action_probs,
+                vf,
+                infos[0],
+                rewards[0],
+            )
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
 
@@ -215,15 +236,71 @@ class Debugger:
             if self.model is None:
                 keys = pygame.key.get_pressed()
                 action, buttons = self.action_mapper.map_keys(keys)
+                vf = "N/A"
             else:
                 action = self.model.predict(obs, deterministic=True)[0][0]
                 buttons = self.retro_env.get_action_meaning(action)
+                action_probs = self._get_action_probs(obs)
+                vf = self._get_model_vf(obs)
             obs, rewards, dones, infos = self.env.step([action])
             done = dones[0]
             self.step += 1
 
     def _get_screen(self):
         return self.retro_env.img
+
+    def _get_action_probs(self, obs):
+        distribution = self.model.policy.get_distribution(
+            torch.from_numpy(obs).to("cuda")
+        )
+        probs = [
+            x.probs.detach().cpu().numpy()[0]
+            for x in distribution.distribution
+        ]
+        # TODO: make this programatically, I'm too lazy for this right now
+        probs = {
+            "B": {"N": probs[0][0], "Y": probs[0][1]},
+            "A": {"N": probs[3][0], "Y": probs[3][1]},
+            "HOR": {
+                "N": probs[2][0],
+                "L": probs[2][1],
+                "R": probs[2][2],
+            },
+            "VER": {
+                "N": probs[1][0],
+                "U": probs[1][1],
+                "D": probs[1][2],
+            },
+        }
+        return self.dict_to_custom_string(probs)
+
+    @staticmethod
+    def dict_to_custom_string(d):
+        def format_dict(inner_d):
+            return (
+                "{"
+                + ", ".join(f"{k}: {v:.0%}" for k, v in inner_d.items())
+                + "}"
+            )
+
+        lines = []
+        for key, value in d.items():
+            formatted_value = format_dict(value)
+            line = f"{key}: {formatted_value}"
+            lines.append(line)
+
+        return ", ".join(lines)
+
+    def _get_model_vf(self, obs):
+        value_function = (
+            self.model.policy.predict_values(torch.from_numpy(obs).to("cuda"))[
+                0, 0
+            ]
+            .detach()
+            .cpu()
+            .numpy()
+        )
+        return f"{value_function:.2f}"
 
 
 class ActionMapper:
@@ -260,6 +337,7 @@ class ActionMapper:
 
 
 if __name__ == "__main__":
-    model_name = "dummy"
+    model_name = "envfix4_crop_nsteps1024_ec0.05"
     debugger = Debugger(model=f"models/{model_name}")
+    # debugger = Debugger()
     debugger.run()

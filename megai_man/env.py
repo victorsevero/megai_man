@@ -11,6 +11,7 @@ from stable_baselines3.common.vec_env import (
     VecTransposeImage,
 )
 from wrappers import (
+    FrameskipWrapper,
     MegaManTerminationWrapper,
     StageRewardWrapper,
     StickyActionWrapper,
@@ -26,6 +27,7 @@ def make_venv(
     n_envs=8,
     state=retro.State.DEFAULT,
     sticky_prob=0.0,
+    frameskip=1,
     damage_terminate=False,
     damage_factor=1,
     truncate_if_no_improvement=True,
@@ -38,6 +40,7 @@ def make_venv(
         return make_env(
             state=state,
             sticky_prob=sticky_prob,
+            frameskip=frameskip,
             damage_terminate=damage_terminate,
             damage_factor=damage_factor,
             truncate_if_no_improvement=truncate_if_no_improvement,
@@ -64,6 +67,7 @@ def make_venv(
 def make_env(
     state=retro.State.DEFAULT,
     sticky_prob=0.25,
+    frameskip=1,
     damage_terminate=False,
     damage_factor=1,
     truncate_if_no_improvement=True,
@@ -72,6 +76,9 @@ def make_env(
     render_mode="human",
     record=False,
 ):
+    assert not (
+        sticky_prob and (frameskip > 1)
+    ), "`sticky_prob` and `max_and_skip` can't be both different than zero"
     if obs_space == "screen":
         obs_type = retro.Observations.IMAGE
     elif obs_space == "ram":
@@ -98,10 +105,13 @@ def make_env(
     )
     if sticky_prob > 0:
         env = StickyActionWrapper(env, action_repeat_probability=sticky_prob)
+    if frameskip > 1:
+        env = FrameskipWrapper(env, skip=frameskip)
     if not truncate_if_no_improvement:
         env = TimeLimit(env, max_episode_steps=4500)
     env = StageRewardWrapper(
         env,
+        frameskip=frameskip,
         stage=0,
         damage_punishment=True,
         damage_factor=damage_factor,
