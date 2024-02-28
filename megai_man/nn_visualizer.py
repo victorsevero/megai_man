@@ -14,17 +14,26 @@ FRAMESTACK_NUMBER = 3
 torch.autograd.set_grad_enabled(True)
 
 
-def make_layer_grid(model, out_size, layer_idx, channel=-1):
+def make_layer_grid(model, out_size, layer_idx, channel=-1, save=True):
     n_rows, n_cols = get_grid_shape(out_size)
+
+    if channel >= 0:
+        idx = copy(channel)
+        cmap = "gray"
+    else:
+        idx = FRAMESTACK_NUMBER + channel
+        cmap = None
 
     plt.figure(figsize=(32, 18))
     for i in trange(out_size):
         img_arr = gradient_ascent(model, i, loop_range=100)
+        if channel >= 0:
+            img_arr = img_arr[..., channel]
 
         plt.subplot(n_rows, n_cols, i + 1)
         plt.imshow(
-            img_arr[..., channel],
-            cmap="gray",
+            img_arr,
+            cmap=cmap,
             vmin=0,
             vmax=255,
             interpolation="none",
@@ -36,14 +45,13 @@ def make_layer_grid(model, out_size, layer_idx, channel=-1):
     plt.tight_layout(h_pad=h_pad, rect=[0, 0, 1, 0.97])
 
     global model_name
-    if channel >= 0:
-        idx = copy(channel)
+    if save:
+        layers_dir = f"layers_activations/{model_name}"
+        os.makedirs(layers_dir, exist_ok=True)
+        path = f"{layers_dir}/channel{idx}_layer{layer_idx}.png"
+        plt.savefig(path)
     else:
-        idx = FRAMESTACK_NUMBER + channel
-    layers_dir = f"layers_activations/{model_name}"
-    os.makedirs(layers_dir, exist_ok=True)
-    path = f"{layers_dir}/channel{idx}_layer{layer_idx}.png"
-    plt.savefig(path)
+        plt.show()
 
 
 def get_grid_shape(n_imgs):
@@ -126,14 +134,14 @@ if __name__ == "__main__":
 
     cnn = model.policy.features_extractor.cnn
 
-    for layer_idx, layer in enumerate(cnn, start=1):
+    for layer_idx, layer in enumerate(cnn):
         if isinstance(layer, nn.ReLU):
-            model = cnn[:layer_idx]
-            conv2d_idx = layer_idx - 2
-            for channel in range(FRAMESTACK_NUMBER):
-                make_layer_grid(
-                    model=model,
-                    out_size=model[conv2d_idx].out_channels,
-                    layer_idx=conv2d_idx,
-                    channel=channel,
-                )
+            model = cnn[: layer_idx + 1]
+            conv2d_idx = layer_idx - 1
+            # for channel in range(FRAMESTACK_NUMBER):
+            make_layer_grid(
+                model=model,
+                out_size=model[conv2d_idx].out_channels,
+                layer_idx=conv2d_idx,
+                # channel=channel,
+            )

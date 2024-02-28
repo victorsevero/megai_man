@@ -34,19 +34,18 @@ def train():
         "clip_range": 0.1,
         "vf_coef": 0.5,
         "ent_coef": 1e-2,
-        "n_epochs": 4,
+        "n_epochs": 20,
     }
     model = PPO(
         policy="CnnPolicy",
         env=venv,
         tensorboard_log="logs/cutman",
-        policy_kwargs={"optimizer_class": torch.optim.RMSprop},
         verbose=0,
         seed=666,
         device="cuda",
         **model_kwargs,
     )
-    model_name = "envfix4_fs4_crop_nsteps1024"
+    model_name = "tuned_arch"
     # model = PPO.load(
     #     f"models/{model_name}",
     #     env=venv,

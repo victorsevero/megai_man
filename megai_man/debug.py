@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import pygame
 import torch
@@ -6,7 +7,13 @@ from stable_baselines3 import PPO
 
 
 class Debugger:
-    def __init__(self, model=None, record=False):
+    def __init__(
+        self,
+        model=None,
+        record=False,
+        graph=False,
+        record_grayscale_obs=False,
+    ):
         pygame.init()
         pygame.font.init()
         self.font_size = 18
@@ -30,6 +37,8 @@ class Debugger:
         self.model = model
         if model is not None:
             self.model = PPO.load(model, env=self.env)
+        self.graph = graph
+        self.record_grayscale_obs = record_grayscale_obs
         self.action_mapper = ActionMapper(self.retro_env)
         self.desired_fps = 60 // frameskip
         self.clock = pygame.time.Clock()
@@ -369,12 +378,19 @@ class Debugger:
                 infos[0],
                 rewards[0],
             )
-            self.display_plots()
+            if self.graph:
+                self.display_plots()
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
 
             if not self.handle_events():
                 break
+
+            if self.record_grayscale_obs:
+                cv2.imwrite(
+                    f"dataset/cutman/{self.step}.png",
+                    np.moveaxis(obs[0], 0, -1),
+                )
 
             if self.model is None:
                 keys = pygame.key.get_pressed()
@@ -474,7 +490,7 @@ class ActionMapper:
 
 
 if __name__ == "__main__":
-    model_name = "envfix4_crop_nsteps1024_ec0.05"
-    debugger = Debugger(model=f"models/{model_name}")
-    # debugger = Debugger()
+    # model_name = "envfix4_crop_nsteps1024_ec0.05"
+    # debugger = Debugger(model=f"models/{model_name}")
+    debugger = Debugger()
     debugger.run()
