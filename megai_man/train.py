@@ -1,6 +1,8 @@
-import torch
+from pathlib import Path
+
 from callbacks import MinDistanceCallback
 from env import make_venv
+from policy import FineTunedArch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 
@@ -28,29 +30,35 @@ def train():
     mini = 1
     model_kwargs = {
         "n_steps": n * zoo_steps,
-        "batch_size": n * zoo_steps * n_envs // mini,
+        # "batch_size": n * zoo_steps * n_envs // mini,
+        "batch_size": 64,
         "learning_rate": 2.5e-4,
         "gamma": 0.999,
         "clip_range": 0.1,
         "vf_coef": 0.5,
         "ent_coef": 1e-2,
-        "n_epochs": 20,
+        "n_epochs": 4,
+        "policy_kwargs": {"features_extractor_class": FineTunedArch},
     }
-    model = PPO(
-        policy="CnnPolicy",
-        env=venv,
-        tensorboard_log="logs/cutman",
-        verbose=0,
-        seed=666,
-        device="cuda",
-        **model_kwargs,
-    )
-    model_name = "tuned_arch"
-    # model = PPO.load(
-    #     f"models/{model_name}",
-    #     env=venv,
-    #     tensorboard_log="logs/cutman",
-    # )
+
+    model_name = "finetuned_arch_epochs4"
+    tensorboard_log = "logs/cutman"
+    if Path(f"models/{model_name}.zip").exists():
+        model = PPO.load(
+            f"models/{model_name}",
+            env=venv,
+            tensorboard_log=tensorboard_log,
+        )
+    else:
+        model = PPO(
+            policy="CnnPolicy",
+            env=venv,
+            tensorboard_log=tensorboard_log,
+            verbose=0,
+            seed=666,
+            device="cuda",
+            **model_kwargs,
+        )
     total_timesteps = 10_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=total_timesteps // n_envs // 10,

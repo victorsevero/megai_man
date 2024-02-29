@@ -27,6 +27,7 @@ def test():
         n_envs=1,
         state="CutMan",
         sticky_prob=0.0,
+        frameskip=4,
         damage_terminate=False,
         damage_factor=1 / 10,
         truncate_if_no_improvement=True,
@@ -34,7 +35,7 @@ def test():
         record=".",
     )
 
-    model_name = "envfix4_crop_nsteps1024_ec0.05"
+    model_name = "finetuned_arch"
     model = PPO.load(f"models/{model_name}", env=venv)
 
     # rewards, lengths = evaluate_policy(
