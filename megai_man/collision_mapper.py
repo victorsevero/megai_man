@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
 
-# arbitraty high level for inifinite pits
+# arbitrary high level for infinite pits
 INFINITE_PIT_HEIGHT = 1_000
 
 
@@ -166,9 +166,6 @@ def is_neighborhood_close_enough(
                 continue
             if (y, x) == neighbor:
                 continue
-            # floor_y = y + get_relative_height(label_grid, (y, x))
-            # if is_inside_NxN_square((floor_y, x), current, N=3):
-            #     return True
             if (
                 is_inside_NxN_square((y, x), current, N=3)
                 and get_relative_height(label_grid, (y, x)) == 0
@@ -184,26 +181,21 @@ def is_valid_path(current, neighbor, value_grid, label_grid):
     neighbor_y = neighbor[0]
     neighbor_height = get_relative_height(label_grid, neighbor)
 
-    # I should really just return the conditions themselves but meh
-    if neighbor_height == INFINITE_PIT_HEIGHT:
-        return True
-    if current_y > neighbor_y:
-        return True
-    if (current_y < neighbor_y) and ((neighbor_height < max_distance)):
-        return True
-    if neighbor_height == 0:
-        return True
-    # if neighbor_height > max_distance:
-    # return False
-    if is_neighborhood_close_enough(
-        current,
-        neighbor,
-        value_grid,
-        label_grid,
-        max_distance,
-    ):
-        return True
-    return False
+    return (
+        (neighbor_height == INFINITE_PIT_HEIGHT)
+        or (current_y > neighbor_y)
+        or ((current_y < neighbor_y) and ((neighbor_height < max_distance)))
+        or (neighbor_height == 0)
+        or (
+            is_neighborhood_close_enough(
+                current,
+                neighbor,
+                value_grid,
+                label_grid,
+                max_distance,
+            )
+        )
+    )
 
 
 def wavefront_expansion(grid, allow_chokepoints=False, allow_any_jump=False):

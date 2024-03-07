@@ -6,63 +6,13 @@ import numpy as np
 from gymnasium import spaces
 
 
-class MegaManTerminationWrapper(gym.Wrapper):
-    def __init__(self, env, damage_terminate=False):
-        super().__init__(env)
-        self.damage_terminate = damage_terminate
-
-    def reset(self, **kwargs):
-        obs, info = self.env.reset(**kwargs)
-        self.prev_lives = self.unwrapped.data["lives"]
-        if self.damage_terminate:
-            self.prev_health = self.unwrapped.data["health"]
-        return obs, info
-
-    def step(self, action):
-        observation, reward, _, truncated, info = self.env.step(action)
-        return observation, reward, self.terminated(), truncated, info
-
-    def terminated(self):
-        data = self.unwrapped.data
-        if self.damage_terminate:
-            health_condition = data["health"] < self.prev_health
-        else:
-            health_condition = data["health"] == 0
-        life_lost = data["lives"] < self.prev_lives
-        self.prev_lives = data["lives"]
-        # fully damaged or suddenly lost one life
-        return health_condition or life_lost
-
-
-class StickyActionWrapper(gym.Wrapper):
-    def __init__(self, env: gym.Env, action_repeat_probability: float):
-        super().__init__(env)
-        self.action_repeat_probability = action_repeat_probability
-
-    def reset(self, **kwargs):
-        self._sticky_action = np.zeros_like(self.action_space.sample())
-        return self.env.reset(**kwargs)
-
-    def step(self, action: int):
-        if self.np_random.random() >= self.action_repeat_probability:
-            self._sticky_action = action
-        return self.env.step(self._sticky_action)
-
-
 class FrameskipWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, skip: int = 4):
         super().__init__(env)
-        assert (
-            env.observation_space.dtype is not None
-        ), "No dtype specified for the observation space"
-        assert (
-            env.observation_space.shape is not None
-        ), "No shape defined for the observation space"
         self._skip = skip
 
     def step(self, action):
         total_reward = 0.0
-        terminated = truncated = False
         for _ in range(self._skip):
             obs, reward, terminated, truncated, info = self.env.step(action)
             done = terminated or truncated
@@ -126,16 +76,43 @@ class WarpFrame(gym.Wrapper):
             y -= 7
 
             # so we don't mess up with cropping out of screen
-            x = min(max(x, self.width), obs_width - self.width)
-            y = min(max(y, self.height), obs_height - self.height)
+            # x = min(max(x, self.width), obs_width - self.width)
+            # y = min(max(y, self.height), obs_height - self.height)
 
-            obs_ = obs[
-                y - self.height : y + self.height,
-                x - self.width : x + self.width,
+            # horizontal padding
+            left_x = x - self.width
+            right_x = x + self.width - obs_width
+            if left_x < 0:
+                before_x = -left_x
+                after_x = 0
+            elif right_x > 0:
+                before_x = 0
+                after_x = right_x
+            else:
+                before_x = 0
+                after_x = 0
+
+            # vertical padding
+            up_y = y - self.height
+            down_y = y + self.height - obs_height
+            if up_y < 0:
+                before_y = -up_y
+                after_y = 0
+            elif down_y > 0:
+                before_y = 0
+                after_y = down_y
+            else:
+                before_y = 0
+                after_y = 0
+
+            obs = np.pad(obs, ((before_y, after_y), (before_x, after_x)))
+            obs = obs[
+                y - self.height + before_y : y + self.height + before_y,
+                x - self.width + before_x : x + self.width + before_x,
             ]
 
         obs = cv2.resize(
-            obs_,
+            obs,
             (self.width, self.height),
             interpolation=cv2.INTER_AREA,
         )
@@ -143,50 +120,134 @@ class WarpFrame(gym.Wrapper):
         return obs[:, :, None]
 
 
-class StageRewardWrapper(gym.RewardWrapper):
+class StageWrapper(gym.Wrapper):
     def __init__(
         self,
         env,
         frameskip,
+        obs_space="screen",
         stage=0,
-        damage_punishment=True,
+        damage_terminate=False,
         damage_factor=1,
+        fixed_damage_punishment=0,
+        forward_factor=1,
+        backward_factor=1,
+        time_punishment_factor=0,
         truncate_if_no_improvement=True,
     ):
         super().__init__(env)
         self.reward_calculator = StageReward(
-            stage, damage_punishment, damage_factor
+            stage,
+            damage_factor,
+            fixed_damage_punishment,
+            forward_factor,
+            backward_factor,
+            time_punishment_factor / frameskip,
         )
-        self.damage_factor = damage_factor
+        self.damage_terminate = damage_terminate
         self.truncate_if_no_improvement = truncate_if_no_improvement
         # max number of frames: NES' FPS * seconds // frameskip
         self.max_number_of_frames_without_improvement = (60 * 10) // frameskip
-        # TODO: set self.reward_range?
-        # self.min_distance = self.reward_calculator.min_distance
+
+        if obs_space == "ram":
+            self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(53,))
+        self.obs_space = obs_space
 
     def reset(self, **kwargs):
         self.reward_calculator.reset()
         observation, info = self.env.reset(**kwargs)
-        return observation, self.info(info)
+        self.prev_lives = self.unwrapped.data["lives"]
+        if self.damage_terminate:
+            self.prev_health = self.unwrapped.data["health"]
+        return self.observation(observation), self.info(info)
 
     def step(self, action):
         observation, reward, terminated, truncated, info = self.env.step(
             action
         )
         return (
-            observation,
+            self.observation(observation),
             self.reward(reward),
-            terminated,
+            self.terminated(terminated),
             self.truncated(truncated)
             if self.truncate_if_no_improvement
             else truncated,
             self.info(info),
         )
 
+    def observation(self, obs):
+        if self.obs_space == "screen":
+            return obs
+
+        screen_scale = 25
+        pos_scale = 255
+        x_speed_scale = 1.5
+        y_speed_scale = 9
+        facing_scale = 64
+        type_scale = 255  # no idea about this one
+        alive_scale = 255  # this one too
+
+        variables = [
+            # screen count
+            obs[0x460] / screen_scale,
+            # X position
+            obs[0x0480] / pos_scale,
+            # Y position
+            obs[0x0600] / pos_scale,
+            # X speed, composed by two bytes: X_hi and X_lo
+            (obs[0x04C0] + obs[0x04E0] / pos_scale) / x_speed_scale,
+            # Y speed, composed by two bytes: Y_hi and Y_lo.
+            # TODO: I'm currently using only Y_hi, this is too much for me
+            (obs[0x0680] if obs[0x0680] < 127 else obs[0x0680] - 256 + 5)
+            / y_speed_scale,
+            # which side Mega Man is facing
+            obs[0x009B] / facing_scale,
+            # bullets on screen
+            obs[0x0060] - 192 / 20,
+        ]
+
+        n_objects = 8
+        for i in range(n_objects):
+            variables += [
+                # i'th object's screen count
+                obs[0x0470 + i] / screen_scale,
+                # i'th object's X position
+                obs[0x0490 + i] / pos_scale,
+                # i'th object's Y position
+                obs[0x0610 + i] / pos_scale,
+                # i'th object's type
+                obs[0x06F0 + i] / type_scale,
+                # i'th object is alive? I'm not sure about this variable, but
+                # it seems to indicate if each object is alive/rendered or not
+                obs[0x007B + i] / alive_scale,
+            ]
+
+        n_bullets = 3
+        for i in range(n_bullets):
+            variables += [
+                # i'th bullet's X position
+                obs[0x0482 + i] / pos_scale,
+                # i'th bullet's Y position
+                obs[0x0602 + i] / pos_scale,
+            ]
+
+        return variables
+
     def reward(self, _):
         reward = self.reward_calculator.get_stage_reward(self.unwrapped.data)
         self.min_distance = self.reward_calculator.min_distance
         return reward
+
+    def terminated(self, terminated):
+        data = self.unwrapped.data
+        if self.damage_terminate:
+            health_condition = data["health"] < self.prev_health
+        else:
+            health_condition = data["health"] == 0
+        life_lost = data["lives"] < self.prev_lives
+        self.prev_lives = data["lives"]
+        # fully damaged or suddenly lost one life
+        return terminated or health_condition or life_lost
 
     def truncated(self, truncated):
         return truncated or (
@@ -240,11 +301,25 @@ class StageReward:
         {"x": 12, "y": 3},
     ]
 
-    def __init__(self, stage=0, damage_punishment=True, damage_factor=1):
-        self.damage_punishment = damage_punishment
+    def __init__(
+        self,
+        stage=0,
+        damage_factor=1,
+        fixed_damage_punishment=0,
+        forward_factor=1,
+        backward_factor=1,
+        time_punishment_factor=0,
+    ):
         self.damage_factor = damage_factor
+        self.fixed_damage_punishment = fixed_damage_punishment
+        self.forward_factor = forward_factor
+        self.backward_factor = backward_factor
+        self.time_punishment_factor = time_punishment_factor
         self.distance_map = self._get_distance_map(stage)
         self.screen_offset_map = self._get_screen_offset_map(stage)
+        assert not fixed_damage_punishment or (
+            damage_factor == 1
+        ), "Not possible to set `damage_factor` if `fixed_damage_punishment` != 0"
 
     def reset(self):
         self.prev_distance = -1  # we don't know distance at start
@@ -261,13 +336,17 @@ class StageReward:
         else:
             reward = self.wavefront_expansion_reward(data)
 
-        if self.damage_punishment:
-            health = data["health"]
-            damage = self.prev_health - health
-            self.prev_health = health
+        health = data["health"]
+        damage = self.prev_health - health
+        damage = max(damage, 0)  # no reward for healing
+        self.prev_health = health
+        if self.fixed_damage_punishment:
+            if damage:
+                reward -= self.fixed_damage_punishment
+        else:
             reward -= self.damage_factor * damage
 
-        return reward
+        return reward - self.time_punishment_factor
 
     def wavefront_expansion_reward(self, data):
         screen = data["screen"]
@@ -313,7 +392,10 @@ class StageReward:
 
         self.prev_distance = distance
 
-        return distance_diff
+        if distance_diff >= 0:
+            return self.forward_factor * distance_diff
+        else:
+            return self.backward_factor * distance_diff
 
     def boss_reward(self, data):
         boss_health = data["boss_health"]

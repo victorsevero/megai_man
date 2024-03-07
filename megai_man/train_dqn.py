@@ -2,7 +2,6 @@ from pathlib import Path
 
 from callbacks import MinDistanceCallback
 from env import make_venv
-from policy import FineTunedArch
 from stable_baselines3 import DQN
 from stable_baselines3.common.callbacks import CheckpointCallback
 
@@ -12,28 +11,34 @@ def train():
     venv = make_venv(
         n_envs=n_envs,
         state="CutMan",
-        sticky_prob=0.0,
         frameskip=4,
-        damage_terminate=False,
-        damage_factor=1 / 10,
+        frame_stack=2,
         truncate_if_no_improvement=True,
         obs_space="screen",
         action_space="discrete",
-        render_mode=None,
+        crop_img=True,
+        render_mode=False,
+        damage_terminate=False,
+        fixed_damage_punishment=2,
+        forward_factor=0.5,
+        backward_factor=0.6,
+        # fixed_damage_punishment=1,
+        # forward_factor=0.25,
+        # backward_factor=0.3,
     )
     model_kwargs = {
-        "buffer_size": 100_000,
+        "buffer_size": max(n_envs // 4, 1) * 100_000,
         "learning_rate": 1e-4,
         "batch_size": 32,
+        "gamma": 0.999,
         "learning_starts": 100_000,
         "target_update_interval": 1000,
         "train_freq": 4,
         "gradient_steps": 1,
-        "exploration_fraction": 0.1,
-        "exploration_final_eps": 1e-2,
-        # "policy_kwargs": {"features_extractor_class": FineTunedArch},
+        "exploration_fraction": 0.01,
+        "exploration_final_eps": 0.05,
     }
-    model_name = "dqn_zoo_fs4"
+    model_name = "dqn_small_rewards_crop2_stack2"
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
         model = DQN.load(
@@ -53,7 +58,7 @@ def train():
         )
     total_timesteps = 10_000_000
     checkpoint_callback = CheckpointCallback(
-        save_freq=total_timesteps // n_envs // 10,
+        save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",
         name_prefix=model_name,
     )

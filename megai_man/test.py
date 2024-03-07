@@ -1,7 +1,5 @@
-import numpy as np
 from env import make_venv
 from stable_baselines3 import PPO
-from stable_baselines3.common.evaluation import evaluate_policy
 
 
 def evaluate_policy_details(model, env):
@@ -26,26 +24,21 @@ def test():
     venv = make_venv(
         n_envs=1,
         state="CutMan",
-        sticky_prob=0.0,
         frameskip=4,
-        damage_terminate=False,
-        damage_factor=1 / 10,
+        frame_stack=2,
         truncate_if_no_improvement=True,
+        obs_space="screen",
+        action_space="multi_discrete",
+        crop_img=True,
         render_mode="human",
         record=".",
+        damage_terminate=False,
+        fixed_damage_punishment=2,
+        forward_factor=0.5,
+        backward_factor=0.6,
     )
-
-    model_name = "finetuned_arch"
-    model = PPO.load(f"models/{model_name}", env=venv)
-
-    # rewards, lengths = evaluate_policy(
-    #     model=model,
-    #     env=venv,
-    #     n_eval_episodes=1,
-    #     deterministic=True,
-    #     return_episode_rewards=True,
-    # )
-    # print(f"Episode length: {lengths[0]}; Episode reward: {rewards[0]}")
+    model_name = "models/andrychowicz_1minibatch_share_fe_nepochs8_ecoef1e-5_small_rewards"
+    model = PPO.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv)
 

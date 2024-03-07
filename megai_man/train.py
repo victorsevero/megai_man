@@ -2,9 +2,9 @@ from pathlib import Path
 
 from callbacks import MinDistanceCallback
 from env import make_venv
-from policy import FineTunedArch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
+from torch import nn
 
 
 def train():
@@ -12,41 +12,44 @@ def train():
     venv = make_venv(
         n_envs=n_envs,
         state="CutMan",
-        sticky_prob=0.0,
-        frameskip=4,
-        damage_terminate=False,
-        damage_factor=1 / 10,
+        frameskip=8,
+        frame_stack=3,
         truncate_if_no_improvement=True,
         obs_space="screen",
         action_space="multi_discrete",
+        crop_img=True,
         render_mode=None,
+        damage_terminate=False,
+        fixed_damage_punishment=2,
+        forward_factor=0.5,
+        backward_factor=0.6,
     )
-    # use this as a guide of max n_steps possible:
-    # 3-frames stacking; 84x84 warped frames; float32 = 4 bytes
-    # obs size is n_envs * 3 * 84 * 84 * 4 = 677376
-    # approximately 677kB per venv observation
-    n = 8
-    zoo_steps = 128
-    mini = 1
     model_kwargs = {
-        "n_steps": n * zoo_steps,
-        # "batch_size": n * zoo_steps * n_envs // mini,
-        "batch_size": 64,
-        "learning_rate": 2.5e-4,
-        "gamma": 0.999,
-        "clip_range": 0.1,
-        "vf_coef": 0.5,
+        "clip_range": 0.25,
+        "policy_kwargs": {
+            "activation_fn": nn.ReLU,
+            "share_features_extractor": True,
+        },
+        "gae_lambda": 0.9,
+        "n_steps": 2048,
+        "batch_size": n_envs * 2048,
+        "n_epochs": 8,
+        # future_horizon = frame_skip * frame_time / (1 - gamma) =
+        # 4 * (1 / 60) / (1 - 0.99) = 6.67 seconds in real game time
+        # that's the future horizon that our agent is capable of planning for
+        "gamma": 0.99,
+        "learning_rate": 3e-4,
         "ent_coef": 1e-2,
-        "n_epochs": 4,
-        "policy_kwargs": {"features_extractor_class": FineTunedArch},
+        # "normalize_advantage": False,
     }
 
-    model_name = "finetuned_arch_epochs4"
+    model_name = "andrychowicz_1minibatch_share_fe_nepochs8_ecoef1e-2_relu_small_rewards"
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
         model = PPO.load(
             f"models/{model_name}",
             env=venv,
+            device="cuda",
             tensorboard_log=tensorboard_log,
         )
     else:

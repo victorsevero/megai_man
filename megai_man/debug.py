@@ -3,7 +3,7 @@ import numpy as np
 import pygame
 import torch
 from env import make_venv
-from stable_baselines3 import PPO
+from stable_baselines3 import DQN, PPO
 
 
 class Debugger:
@@ -13,33 +13,46 @@ class Debugger:
         record=False,
         graph=False,
         record_grayscale_obs=False,
+        frame_by_frame=False,
+        deterministic=True,
     ):
         pygame.init()
         pygame.font.init()
         self.font_size = 18
         self.font = pygame.font.SysFont("opensans", self.font_size)
         self.small_font = pygame.font.SysFont("opensans", 12)
-        frameskip = 1
+        frameskip = 4
+        if model is not None and "/dqn_" in model:
+            action_space = "discrete"
+            ModelClass = DQN
+        else:
+            action_space = "multi_discrete"
+            ModelClass = PPO
         self.env = make_venv(
             n_envs=1,
             state="CutMan",
-            sticky_prob=0.0,
             frameskip=frameskip,
-            damage_terminate=False,
-            damage_factor=1 / 10,
+            frame_stack=2,
             truncate_if_no_improvement=False,
             obs_space="screen",
-            action_space="multi_discrete",
+            action_space=action_space,
+            crop_img=True,
             render_mode=None,
             record=record,
+            damage_terminate=False,
+            fixed_damage_punishment=2,
+            forward_factor=0.5,
+            backward_factor=0.6,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
         if model is not None:
-            self.model = PPO.load(model, env=self.env)
+            self.model = ModelClass.load(model, env=self.env)
         self.graph = graph
         self.record_grayscale_obs = record_grayscale_obs
-        self.action_mapper = ActionMapper(self.retro_env)
+        self.frame_by_frame = frame_by_frame
+        self.deterministic = deterministic
+        self.action_mapper = ActionMapper(self.retro_env, action_space)
         self.desired_fps = 60 // frameskip
         self.clock = pygame.time.Clock()
         self._setup_screen()
@@ -78,23 +91,16 @@ class Debugger:
         self.resize_factor = resize_factor
 
     def render_screen(self, obs):
-        last_obs_resized = np.repeat(
-            np.repeat(obs, self.resize_factor, axis=0),
-            self.resize_factor,
-            axis=1,
-        ).T
-        last_obs_rgb = np.stack((last_obs_resized,) * 3, axis=-1)
-        surface = pygame.surfarray.make_surface(last_obs_rgb)
+        surface = pygame.surfarray.make_surface(
+            np.stack((obs.T,) * 3, axis=-1)
+        )
+        surface = pygame.transform.scale_by(surface, self.resize_factor)
         self.screen.blit(surface, (0, 0))
 
         screen = self._get_screen()
-        screen = np.repeat(
-            np.repeat(screen, self.resize_factor, axis=0),
-            self.resize_factor,
-            axis=1,
-        ).T
-        screen = np.transpose(screen, (1, 2, 0))
+        screen = np.transpose(screen.T, (1, 2, 0))
         surface = pygame.surfarray.make_surface(screen)
+        surface = pygame.transform.scale_by(surface, self.resize_factor)
         self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
 
     def display_info(self, action, probs, vf, infos, reward):
@@ -156,27 +162,6 @@ class Debugger:
                 text_surface,
                 (x + self.pad, y + i * self.font_size),
             )
-
-    # def display_plots(self):
-    #     if self.step % 10 == 0:
-    #         px = 1 / plt.rcParams["figure.dpi"]
-    #         size = (84 * self.resize_factor * px, 84 * self.resize_factor * px)
-    #         fig = plt.figure(figsize=size)
-    #         ax = fig.gca()
-    #         sns.lineplot(data=self.cum_rewards, ax=ax)
-    #         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-    #         ax.grid(False)
-    #         plt.title("Cumulative Rewards")
-    #         plt.tight_layout()
-
-    #         canvas = agg.FigureCanvasAgg(fig)
-    #         canvas.draw()
-    #         renderer = canvas.get_renderer()
-    #         raw_data = renderer.buffer_rgba()
-    #         size = canvas.get_width_height()
-
-    #         graph_surface = pygame.image.frombuffer(raw_data, size, "RGBA")
-    #         self.screen.blit(graph_surface, (0, 84 * self.resize_factor + 1))
 
     def display_plots(self):
         if len(self.cum_rewards) < 2:
@@ -300,7 +285,7 @@ class Debugger:
             )
 
     def handle_events(self):
-        paused = False
+        paused = self.frame_by_frame
         while True:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT or (
@@ -397,9 +382,13 @@ class Debugger:
                 action, buttons = self.action_mapper.map_keys(keys)
                 vf = "N/A"
             else:
-                action = self.model.predict(obs, deterministic=True)[0][0]
+                action = self.model.predict(
+                    obs,
+                    deterministic=self.deterministic,
+                )[0][0]
                 buttons = self.retro_env.get_action_meaning(action)
-                action_probs = self._get_action_probs(obs)
+                if not isinstance(self.model, DQN):
+                    action_probs = self._get_action_probs(obs)
                 vf = self._get_model_vf(obs)
             obs, rewards, dones, infos = self.env.step([action])
             cum_reward += rewards[0]
@@ -422,8 +411,8 @@ class Debugger:
         probs = {
             "B": {"Y": probs[0][1], "N": probs[0][0]},
             "A": {"Y": probs[3][1], "N": probs[3][0]},
-            "HOR": {"L": probs[2][1], "R": probs[2][2], "N": probs[2][0]},
-            "VER": {"U": probs[1][1], "D": probs[1][2], "N": probs[1][0]},
+            "H": {"L": probs[2][1], "R": probs[2][2], "N": probs[2][0]},
+            "V": {"U": probs[1][1], "D": probs[1][2], "N": probs[1][0]},
         }
         return self.dict_to_custom_string(probs)
 
@@ -445,23 +434,24 @@ class Debugger:
         return ", ".join(lines)
 
     def _get_model_vf(self, obs):
-        value_function = (
-            self.model.policy.predict_values(torch.from_numpy(obs).to("cuda"))[
-                0, 0
-            ]
-            .detach()
-            .cpu()
-            .numpy()
-        )
+        cuda_obs = torch.from_numpy(obs).to("cuda")
+        if isinstance(self.model, DQN):
+            value_function = self.model.q_net(cuda_obs)[0].max()
+        else:
+            value_function = self.model.policy.predict_values(cuda_obs)[0, 0]
+        value_function = value_function.detach().cpu().numpy()
         return f"{value_function:.2f}"
 
 
 class ActionMapper:
-    def __init__(self, env):
-        sizes = env.action_space.nvec
-        ranges = [np.arange(size) for size in sizes]
-        mesh = np.meshgrid(*ranges, indexing="ij")
-        actions_arrs = np.stack(mesh, axis=-1).reshape(-1, len(sizes))
+    def __init__(self, env, action_space="multi_discrete"):
+        if action_space == "multi_discrete":
+            sizes = env.action_space.nvec
+            ranges = [np.arange(size) for size in sizes]
+            mesh = np.meshgrid(*ranges, indexing="ij")
+            actions_arrs = np.stack(mesh, axis=-1).reshape(-1, len(sizes))
+        else:
+            actions_arrs = np.arange(env.action_space.n)
 
         self.actions = {}
         for action_arr in actions_arrs:
@@ -490,7 +480,9 @@ class ActionMapper:
 
 
 if __name__ == "__main__":
-    # model_name = "envfix4_crop_nsteps1024_ec0.05"
-    # debugger = Debugger(model=f"models/{model_name}")
+    model = "models/andrychowicz_1minibatch_share_fe_nepochs8_ecoef1e-5_small_rewards"
+    # debugger = Debugger(model=model, deterministic=False)
+    # debugger = Debugger(model=model, frame_by_frame=True)
+    # debugger = Debugger(frame_by_frame=True)
     debugger = Debugger()
     debugger.run()

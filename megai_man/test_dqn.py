@@ -7,7 +7,7 @@ def evaluate_policy_details(model, env):
     done = False
     current_length = 0
     while not done:
-        actions, _ = model.predict(obs, state=None, deterministic=True)
+        actions, _ = model.predict(obs, state=None, deterministic=False)
         action = env.unwrapped.envs[0].unwrapped.get_action_meaning(actions[0])
         obs, rewards, dones, infos = env.step(actions)
         done = dones[0]
@@ -24,17 +24,21 @@ def test():
     venv = make_venv(
         n_envs=1,
         state="CutMan",
-        sticky_prob=0.0,
-        damage_terminate=False,
+        frameskip=4,
+        frame_stack=2,
         truncate_if_no_improvement=True,
-        obs_space="ram",
+        obs_space="screen",
         action_space="discrete",
+        crop_img=True,
         render_mode="human",
         record=".",
+        damage_terminate=False,
+        fixed_damage_punishment=2,
+        forward_factor=0.5,
+        backward_factor=0.6,
     )
-
-    model_name = "dqn_envfix4_ram"
-    model = DQN.load(f"models/{model_name}", env=venv)
+    model_name = "checkpoints/dqn_small_rewards_crop2_stack2_6000000_steps"
+    model = DQN.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv)
 

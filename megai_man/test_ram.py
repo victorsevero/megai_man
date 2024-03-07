@@ -29,7 +29,6 @@ def test():
     venv = make_venv(
         n_envs=1,
         state="CutMan",
-        sticky_prob=0.0,
         damage_terminate=False,
         truncate_if_no_improvement=False,
         obs_space="ram",

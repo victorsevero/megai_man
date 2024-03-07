@@ -175,3 +175,6 @@ rom.sfc
 # Movie files
 /*.bk2
 /*.mp4
+
+# Profiling files
+/*.prof
