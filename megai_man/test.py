@@ -30,6 +30,7 @@ def test():
         obs_space="screen",
         action_space="multi_discrete",
         crop_img=True,
+        invincible=True,
         render_mode="human",
         record=".",
         damage_terminate=False,
@@ -37,7 +38,11 @@ def test():
         forward_factor=0.5,
         backward_factor=0.6,
     )
-    model_name = "models/andrychowicz_1minibatch_share_fe_nepochs8_ecoef1e-5_small_rewards"
+    model_name = (
+        "checkpoints/"
+        "sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-03__fs4_stack2_crop224_death10_smallest_rewards_trunc1minnoprog_INVINCIBLE"
+        "_2000000_steps"
+    )
     model = PPO.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv)

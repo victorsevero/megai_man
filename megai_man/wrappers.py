@@ -4,6 +4,7 @@ import cv2
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
 
 
 class FrameskipWrapper(gym.Wrapper):
@@ -35,6 +36,9 @@ class WarpFrame(gym.Wrapper):
         self.width = width
         self.height = height
         self.crop = crop
+        self.crop_window_y, self.crop_window_x = (224, 224)
+        self.half_crop_y = self.crop_window_y // 2
+        self.half_crop_x = self.crop_window_x // 2
         assert isinstance(
             env.observation_space, spaces.Box
         ), f"Expected Box space, got {env.observation_space}"
@@ -75,13 +79,9 @@ class WarpFrame(gym.Wrapper):
             x -= 9
             y -= 7
 
-            # so we don't mess up with cropping out of screen
-            # x = min(max(x, self.width), obs_width - self.width)
-            # y = min(max(y, self.height), obs_height - self.height)
-
             # horizontal padding
-            left_x = x - self.width
-            right_x = x + self.width - obs_width
+            left_x = x - self.half_crop_x
+            right_x = x + self.half_crop_x - obs_width
             if left_x < 0:
                 before_x = -left_x
                 after_x = 0
@@ -93,8 +93,8 @@ class WarpFrame(gym.Wrapper):
                 after_x = 0
 
             # vertical padding
-            up_y = y - self.height
-            down_y = y + self.height - obs_height
+            up_y = y - self.half_crop_y
+            down_y = y + self.half_crop_y - obs_height
             if up_y < 0:
                 before_y = -up_y
                 after_y = 0
@@ -107,8 +107,16 @@ class WarpFrame(gym.Wrapper):
 
             obs = np.pad(obs, ((before_y, after_y), (before_x, after_x)))
             obs = obs[
-                y - self.height + before_y : y + self.height + before_y,
-                x - self.width + before_x : x + self.width + before_x,
+                y
+                - self.half_crop_y
+                + before_y : y
+                + self.half_crop_y
+                + before_y,
+                x
+                - self.half_crop_x
+                + before_x : x
+                + self.half_crop_x
+                + before_x,
             ]
 
         obs = cv2.resize(
@@ -117,7 +125,26 @@ class WarpFrame(gym.Wrapper):
             interpolation=cv2.INTER_AREA,
         )
 
-        return obs[:, :, None]
+        return obs[:, :, np.newaxis]
+
+
+class VecImageScaling(VecEnvWrapper):
+    def __init__(self, venv: VecEnv):
+        observation_space = spaces.Box(
+            0.0,
+            1.0,
+            shape=venv.observation_space.shape,
+            dtype=np.float32,
+        )
+        super().__init__(venv, observation_space=observation_space)
+
+    def step_wait(self):
+        observations, rewards, dones, infos = self.venv.step_wait()
+        return observations / 255, rewards, dones, infos
+
+    def reset(self):
+        observations = self.venv.reset()
+        return observations / 255
 
 
 class StageWrapper(gym.Wrapper):
@@ -147,7 +174,7 @@ class StageWrapper(gym.Wrapper):
         self.damage_terminate = damage_terminate
         self.truncate_if_no_improvement = truncate_if_no_improvement
         # max number of frames: NES' FPS * seconds // frameskip
-        self.max_number_of_frames_without_improvement = (60 * 10) // frameskip
+        self.max_number_of_frames_without_improvement = (60 * 60) // frameskip
 
         if obs_space == "ram":
             self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(53,))
@@ -235,6 +262,7 @@ class StageWrapper(gym.Wrapper):
 
     def reward(self, _):
         reward = self.reward_calculator.get_stage_reward(self.unwrapped.data)
+
         self.min_distance = self.reward_calculator.min_distance
         return reward
 
@@ -245,7 +273,6 @@ class StageWrapper(gym.Wrapper):
         else:
             health_condition = data["health"] == 0
         life_lost = data["lives"] < self.prev_lives
-        self.prev_lives = data["lives"]
         # fully damaged or suddenly lost one life
         return terminated or health_condition or life_lost
 
@@ -259,6 +286,7 @@ class StageWrapper(gym.Wrapper):
         info["min_distance"] = self.reward_calculator.min_distance
         info["distance"] = self.reward_calculator.prev_distance
         info["max_screen"] = self.reward_calculator.max_screen
+        info["hp"] = self.unwrapped.data["health"]
         info["x"] = self.unwrapped.data["x"]
         info["y"] = self.unwrapped.data["y"]
         info["screen"] = self.unwrapped.data["screen"]
@@ -323,6 +351,7 @@ class StageReward:
 
     def reset(self):
         self.prev_distance = -1  # we don't know distance at start
+        self.prev_lives = None
         self.prev_health = 28
         self.boss_filled_health = False
         self.prev_boss_health = 28
@@ -349,6 +378,11 @@ class StageReward:
         return reward - self.time_punishment_factor
 
     def wavefront_expansion_reward(self, data):
+        # if self.prev_lives is not None and data["lives"] < self.prev_lives:
+        #     return -5
+        # else:
+        #     self.prev_lives = data["lives"]
+
         screen = data["screen"]
         if screen > self.max_screen:
             self.max_screen = screen
@@ -395,6 +429,10 @@ class StageReward:
         if distance_diff >= 0:
             return self.forward_factor * distance_diff
         else:
+            # high pits were discouraging the agent to try jumping over them,
+            # so we only penalize the agent for 9 backward tiles at max
+            # return self.backward_factor * max(distance_diff, -9)
+            # POST MORTEM: this ended in infinite positive loops as expected :)
             return self.backward_factor * distance_diff
 
     def boss_reward(self, data):

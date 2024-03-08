@@ -2,6 +2,7 @@ from pathlib import Path
 
 import retro
 from gymnasium.wrappers.time_limit import TimeLimit
+from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
     SubprocVecEnv,
@@ -24,7 +25,8 @@ def make_venv(
     truncate_if_no_improvement=True,
     obs_space="screen",
     action_space="multi_discrete",
-    crop_img=False,
+    crop_img=True,
+    invincible=False,
     render_mode="human",
     record=False,
     **stage_wrapper_kwargs,
@@ -37,6 +39,7 @@ def make_venv(
             obs_space=obs_space,
             action_space=action_space,
             crop_img=crop_img,
+            invincible=invincible,
             render_mode=render_mode,
             record=record,
             **stage_wrapper_kwargs,
@@ -51,7 +54,7 @@ def make_venv(
         venv = VecTransposeImage(venv)
     venv = VecMonitor(
         venv,
-        info_keywords=("distance", "min_distance", "max_screen"),
+        info_keywords=("distance", "min_distance", "max_screen", "hp"),
     )
     return venv
 
@@ -62,7 +65,8 @@ def make_env(
     truncate_if_no_improvement=True,
     obs_space="screen",
     action_space="multi_discrete",
-    crop_img=False,
+    crop_img=True,
+    invincible=False,
     render_mode="human",
     record=False,
     **stage_wrapper_kwargs,
@@ -91,10 +95,13 @@ def make_env(
         record=record,
         obs_type=obs_type,
     )
+    if invincible:
+        env.em.add_cheat("VVXXAPSZ")
     if frameskip > 1:
         env = FrameskipWrapper(env, skip=frameskip)
     if not truncate_if_no_improvement:
-        env = TimeLimit(env, max_episode_steps=100_000)
+        # max number of frames: NES' FPS * seconds // frameskip
+        env = TimeLimit(env, max_episode_steps=(60 * 360) // frameskip)
     env = StageWrapper(
         env,
         frameskip=frameskip,
@@ -106,3 +113,8 @@ def make_env(
     if obs_space == "screen":
         env = WarpFrame(env, crop=crop_img)
     return env
+
+
+if __name__ == "__main__":
+    env = make_env()
+    check_env(env)

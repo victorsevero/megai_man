@@ -18,7 +18,7 @@ def get_wall_tiles_paths(prefix):
         str(Path(dir_path) / path)
         for path in paths
         if path.startswith(prefix)
-        and not path.endswith(("-l.png", "-full.png"))
+        and not path.endswith(("-l.png", "-p.png", "-full.png"))
     ]
     return sorted(paths)
 
@@ -34,6 +34,17 @@ def get_ladder_tiles_paths(prefix):
     return sorted(paths)
 
 
+def get_spike_tiles_paths(prefix):
+    dir_path = "images/tiles"
+    paths = os.listdir("images/tiles")
+    paths = [
+        str(Path(dir_path) / path)
+        for path in paths
+        if path.startswith(prefix) and ("-p" in path)
+    ]
+    return sorted(paths)
+
+
 def exact_match(img1, img2):
     if img1.shape != img2.shape:
         return False
@@ -41,6 +52,7 @@ def exact_match(img1, img2):
     return np.all(diff == 0)
 
 
+# 1960, 698 = 122, 43 = x, y
 def get_tiles(prefix):
     wall_tiles = []
     for tile_path in get_wall_tiles_paths(prefix):
@@ -55,10 +67,18 @@ def get_tiles(prefix):
         w, h = tile.shape[1::-1]
         assert w == h == 16, f"{tile_path} is not 16x16"
         ladder_tiles.append(tile)
-    return wall_tiles, ladder_tiles
+
+    spike_tiles = []
+    for tile_path in get_spike_tiles_paths(prefix):
+        tile = cv2.imread(tile_path)
+        w, h = tile.shape[1::-1]
+        assert w == h == 16, f"{tile_path} is not 16x16"
+        spike_tiles.append(tile)
+
+    return wall_tiles, ladder_tiles, spike_tiles
 
 
-def get_collision_map(img, wall_tiles, ladder_tiles, start, end):
+def get_collision_map(img, wall_tiles, ladder_tiles, spike_tiles, start, end):
     width = img.shape[1]
     height = img.shape[0]
     collision_map = np.empty((height // 16, width // 16), dtype=str)
@@ -67,6 +87,7 @@ def get_collision_map(img, wall_tiles, ladder_tiles, start, end):
     for x in range(0, height, 16):
         for y in range(0, width, 16):
             cropped_tile = img[x : x + 16, y : y + 16]
+
             wall_match = False
             for tile in wall_tiles:
                 if exact_match(tile, cropped_tile):
@@ -83,7 +104,19 @@ def get_collision_map(img, wall_tiles, ladder_tiles, start, end):
                         ladder_match = True
                         break
 
-            if not (wall_match or ladder_match) and np.any(cropped_tile):
+            if not (wall_match or ladder_match):
+                spike_match = False
+                for tile in spike_tiles:
+                    if exact_match(tile, cropped_tile):
+                        img[x : x + 16, y : y + 16] = [223, 223, 223]
+                        # P as in sPike; S is taken for Start
+                        collision_map[x // 16, y // 16] = "p"
+                        spike_match = True
+                        break
+
+            if not (wall_match or ladder_match or spike_match) and np.any(
+                cropped_tile
+            ):
                 img[x : x + 16, y : y + 16] = [255, 255, 255]
                 collision_map[x // 16, y // 16] = ""
             if (y // 16, x // 16) == start:
@@ -133,14 +166,6 @@ def get_relative_height(grid, node):
     return INFINITE_PIT_HEIGHT
 
 
-def height_map(grid):
-    value_grid = np.zeros_like(grid, dtype=int)
-    for y in range(grid.shape[0]):
-        for x in range(grid.shape[1]):
-            value_grid[y, x] = get_relative_height(grid, (y, x))
-    return value_grid
-
-
 def is_inside_NxN_square(node1, node2, N=3):
     return (abs(node1[0] - node2[0]) <= N) and (abs(node1[1] - node2[1]) <= N)
 
@@ -175,6 +200,18 @@ def is_neighborhood_close_enough(
     return False
 
 
+def is_above_spike(node, label_grid, n=3):
+    y = node[0]
+    x = node[1]
+    try:
+        for i in range(n):
+            if label_grid[y, x + i] == "p":
+                return True
+    except IndexError:
+        return False
+    return False
+
+
 def is_valid_path(current, neighbor, value_grid, label_grid):
     max_distance = 3
     current_y = current[0]
@@ -195,7 +232,7 @@ def is_valid_path(current, neighbor, value_grid, label_grid):
                 max_distance,
             )
         )
-    )
+    ) and not is_above_spike(neighbor, label_grid, n=3)
 
 
 def wavefront_expansion(grid, allow_chokepoints=False, allow_any_jump=False):
@@ -266,11 +303,12 @@ if __name__ == "__main__":
     assert (
         img.shape[0] % 16 == 0 and img.shape[1] % 16 == 0
     ), f"{img_path} is not made of 16x16 tiles"
-    wall_tiles, ladder_tiles = get_tiles(tiles_prefix)
+    wall_tiles, ladder_tiles, spike_tiles = get_tiles(tiles_prefix)
     collision_map = get_collision_map(
         img,
         wall_tiles,
         ladder_tiles,
+        spike_tiles,
         start,
         end,
     )

@@ -28,6 +28,13 @@ class MinDistanceCallback(BaseCallback):
             len(self.model.ep_info_buffer) > 0
             and len(self.model.ep_info_buffer[0]) > 0
         ):
+            # TODO: log min/max rewards?
+            # self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
+            hps = [ep_info["hp"] for ep_info in self.model.ep_info_buffer]
+            self.logger.record("rollout/final_hp_max", max(hps))
+            self.logger.record("rollout/final_hp_min", min(hps))
+            self.logger.record("rollout/final_hp_mean", safe_mean(hps))
+
             min_distances = [
                 ep_info["min_distance"]
                 for ep_info in self.model.ep_info_buffer
@@ -61,46 +68,6 @@ class MinDistanceCallback(BaseCallback):
                     ]
                 ),
             )
-
-            if self.show_image:
-                # TODO: PLEASE REFACTOR THIS PLEASE
-                x = self.model.ep_info_buffer[-1]["x"]
-                y = self.model.ep_info_buffer[-1]["y"]
-                screen = self.model.ep_info_buffer[-1]["screen"]
-                x = int(
-                    (
-                        StageReward.SCREEN_WIDTH
-                        * StageReward.SCREENS_OFFSETS_CUTMAN[screen]["x"]
-                        + x
-                    )
-                )
-                y = int(
-                    (
-                        StageReward.SCREEN_HEIGHT
-                        * StageReward.SCREENS_OFFSETS_CUTMAN[screen]["y"]
-                        + y
-                    )
-                )
-
-                bg = self.bg.copy()
-                bg.paste(self.sprite, (x, y), self.sprite)
-                bg.show()
-
-    # @staticmethod
-    # def get_image(value_grid):
-    #     custom_cmap = get_custom_cmap(value_grid.max())
-    #     heatmap_arr = custom_cmap(value_grid, bytes=True)
-
-    #     # fix walls
-    #     heatmap_arr[value_grid == -1] = (0, 0, 0, 255)
-
-    #     heatmap = Image.fromarray(heatmap_arr, mode="RGBA")
-    #     heatmap = heatmap.resize(
-    #         tuple(16 * x for x in value_grid.shape[::-1]),
-    #         Image.Resampling.NEAREST,
-    #     )
-    #     heatmap = draw_grid(heatmap)
-    #     return heatmap
 
 
 class StopTrainingOnTimeBudget(BaseCallback):

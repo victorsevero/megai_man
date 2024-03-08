@@ -33,16 +33,17 @@ class Debugger:
             state="CutMan",
             frameskip=frameskip,
             frame_stack=2,
-            truncate_if_no_improvement=False,
+            truncate_if_no_improvement=True,
             obs_space="screen",
             action_space=action_space,
             crop_img=True,
+            invincible=True,
             render_mode=None,
             record=record,
             damage_terminate=False,
-            fixed_damage_punishment=2,
-            forward_factor=0.5,
-            backward_factor=0.6,
+            fixed_damage_punishment=1,
+            forward_factor=0.1,
+            backward_factor=0.11,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
@@ -59,9 +60,9 @@ class Debugger:
         self.debug_info_start_y = 10
         self.debug_messages = []
         self.box_text = (
-            "Step: {step}, Action: {action}, Reward: {reward}, VF: {vf}\n"
+            "Step: {step}, Action: {action}, Reward: {reward:+2.2f}, VF: {vf}\n"
             "{probs}\n"
-            "X: {x}, Y: {y}\n"
+            "X: {x}, Y: {y}, Distance: {distance}\n"
         )
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
@@ -132,6 +133,7 @@ class Debugger:
                 vf=vf,
                 x=info.get("x", "N/A"),
                 y=info.get("y", "N/A"),
+                distance=info.get("distance", "N/A"),
                 reward=reward,
             ).split("\n")
 
@@ -344,11 +346,13 @@ class Debugger:
 
     def run(self):
         obs = self.env.reset()
+        # self.retro_env.em.add_cheat("VVXXAPSZ")
+        # self.retro_env.em.add_cheat("APNIZLAL")
         buttons = ["N/A"]
         action_probs = "N/A"
         vf = "N/A"
         done = False
-        rewards = ["N/A"]
+        rewards = [0]
         cum_reward = 0
         self.cum_rewards = [cum_reward]
         infos = [{}]
@@ -480,9 +484,9 @@ class ActionMapper:
 
 
 if __name__ == "__main__":
-    model = "models/andrychowicz_1minibatch_share_fe_nepochs8_ecoef1e-5_small_rewards"
-    # debugger = Debugger(model=model, deterministic=False)
+    model = None
+    model = "checkpoints/sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc1minnoprog_INVINCIBLE2_2000000_steps"
+    debugger = Debugger(model=model, deterministic=True)
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)
-    debugger = Debugger()
     debugger.run()
