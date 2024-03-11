@@ -27,7 +27,7 @@ def train():
         backward_factor=0.11,
     )
     model_kwargs = {
-        "learning_rate": 1e-4,
+        "learning_rate": 2.5e-4,
         "n_steps": 64,
         "batch_size": 64,
         "n_epochs": 1,
@@ -58,7 +58,8 @@ def train():
         "_smallest_rewards"
         # "_trunc6min"
         "_trunc1minnoprog"
-        "_INVINCIBLE3"
+        "_spikefix2"
+        "_INVINCIBLE"
     )
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
@@ -78,7 +79,7 @@ def train():
             device="cuda",
             **model_kwargs,
         )
-    total_timesteps = 20_000_000
+    total_timesteps = 10_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",

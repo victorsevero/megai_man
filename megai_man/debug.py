@@ -62,7 +62,7 @@ class Debugger:
         self.box_text = (
             "Step: {step}, Action: {action}, Reward: {reward:+2.2f}, VF: {vf}\n"
             "{probs}\n"
-            "X: {x}, Y: {y}, Distance: {distance}\n"
+            "Screen: {screen}, X: {x}, Y: {y}, Distance: {distance}\n"
         )
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
@@ -131,6 +131,7 @@ class Debugger:
                 action=action,
                 probs=probs,
                 vf=vf,
+                screen=info.get("screen", "N/A"),
                 x=info.get("x", "N/A"),
                 y=info.get("y", "N/A"),
                 distance=info.get("distance", "N/A"),
@@ -303,6 +304,8 @@ class Debugger:
                         self.display_pause_message()
                     else:
                         return True
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+                    self.frame_by_frame = not self.frame_by_frame
             if not paused:
                 break
             self.clock.tick(10)
@@ -346,8 +349,6 @@ class Debugger:
 
     def run(self):
         obs = self.env.reset()
-        # self.retro_env.em.add_cheat("VVXXAPSZ")
-        # self.retro_env.em.add_cheat("APNIZLAL")
         buttons = ["N/A"]
         action_probs = "N/A"
         vf = "N/A"
@@ -485,7 +486,7 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc1minnoprog_INVINCIBLE2_2000000_steps"
+    model = "checkpoints/sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc1minnoprog_spikefix_INVINCIBLE_3000000_steps"
     debugger = Debugger(model=model, deterministic=True)
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)

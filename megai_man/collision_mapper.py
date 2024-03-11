@@ -326,6 +326,8 @@ if __name__ == "__main__":
     heatmap_arr[value_grid == -1] = (0, 0, 0, 255)
     # fix ladders
     heatmap_arr[collision_map == "l"] = (0x42, 0x28, 0x0E, 255)
+    # fix spikes
+    heatmap_arr[collision_map == "p"] = (223, 223, 223, 255)
 
     heatmap = Image.fromarray(heatmap_arr, mode="RGBA")
     heatmap = heatmap.resize(
