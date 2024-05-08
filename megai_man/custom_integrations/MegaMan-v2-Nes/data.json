@@ -43,6 +43,14 @@
     "camera_screen": {
       "address": 27,
       "type": "|u1"
+    },
+    "touching_obj_top": {
+      "address": 44,
+      "type": "|u1"
+    },
+    "touching_obj_side": {
+      "address": 148,
+      "type": "|u1"
     }
   }
 }

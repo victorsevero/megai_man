@@ -401,6 +401,9 @@ class Debugger:
             done = dones[0]
             self.step += 1
 
+        self.frame_by_frame = True
+        self.handle_events()
+
     def _get_screen(self):
         return self.retro_env.img
 
@@ -486,8 +489,8 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc1minnoprog_spikefix_INVINCIBLE_3000000_steps"
-    debugger = Debugger(model=model, deterministic=True)
+    # model = "checkpoints/sevs_steps64_batch64_lr2.5e-04_epochs1_clip0.2_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc60snoprog_spikefix4_INVINCIBLE_5000000_steps"
+    debugger = Debugger(model=model, deterministic=True, graph=True)
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)
     debugger.run()

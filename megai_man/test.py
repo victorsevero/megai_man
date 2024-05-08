@@ -34,15 +34,16 @@ def test():
         render_mode="human",
         record=".",
         damage_terminate=False,
-        fixed_damage_punishment=2,
-        forward_factor=0.5,
-        backward_factor=0.6,
+        fixed_damage_punishment=1,
+        forward_factor=0.1,
+        backward_factor=0.11,
     )
     model_name = (
         "checkpoints/"
         "sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-03__fs4_stack2_crop224_death10_smallest_rewards_trunc1minnoprog_INVINCIBLE"
         "_2000000_steps"
     )
+    model_name = "models/sevs_steps16_batch16_lr2.5e-04_epochs1_clip0.2_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc60snoprog_spikefix3_scen3_INVINCIBLE/best_model.zip"
     model = PPO.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv)

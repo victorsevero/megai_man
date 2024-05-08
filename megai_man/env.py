@@ -29,6 +29,7 @@ def make_venv(
     invincible=False,
     render_mode="human",
     record=False,
+    _enforce_subproc=False,
     **stage_wrapper_kwargs,
 ):
     def env_fn():
@@ -45,7 +46,7 @@ def make_venv(
             **stage_wrapper_kwargs,
         )
 
-    if n_envs == 1:
+    if (n_envs == 1) and not _enforce_subproc:
         venv = DummyVecEnv([env_fn])
     else:
         venv = SubprocVecEnv([env_fn] * n_envs)

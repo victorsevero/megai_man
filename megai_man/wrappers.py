@@ -6,6 +6,9 @@ import numpy as np
 from gymnasium import spaces
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
 
+# https://datacrystal.romhacking.net/wiki/Mega_Man_(NES)/RAM_map
+SPIKE_VALUE = 3
+
 
 class FrameskipWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, skip: int = 4):
@@ -189,9 +192,12 @@ class StageWrapper(gym.Wrapper):
         return self.observation(observation), self.info(info)
 
     def step(self, action):
-        observation, reward, terminated, truncated, info = self.env.step(
-            action
-        )
+        while True:
+            observation, reward, terminated, truncated, info = self.env.step(
+                action
+            )
+            if self.unwrapped.data["camera_y"] == 0:
+                break
         return (
             self.observation(observation),
             self.reward(reward),
@@ -268,13 +274,21 @@ class StageWrapper(gym.Wrapper):
 
     def terminated(self, terminated):
         data = self.unwrapped.data
+
         if self.damage_terminate:
             health_condition = data["health"] < self.prev_health
         else:
             health_condition = data["health"] == 0
+
         life_lost = data["lives"] < self.prev_lives
-        # fully damaged or suddenly lost one life
-        return terminated or health_condition or life_lost
+
+        touched_spike = (
+            data["touching_obj_top"] == SPIKE_VALUE
+            or data["touching_obj_side"] == SPIKE_VALUE
+        )
+
+        # fully damaged or suddenly lost one life or touched a spike
+        return terminated or health_condition or life_lost or touched_spike
 
     def truncated(self, truncated):
         return truncated or (
@@ -300,7 +314,8 @@ class StageReward:
     SCREEN_WIDTH = 256
     SCREEN_HEIGHT = 240
     TILE_SIZE = 16
-    MEGA_MAN_SPRITE_OFFSET_Y = 11  # distance from his RAM position to his feet
+    # won't use this for now, it's buggy in some edge cases, we'll see
+    # MEGA_MAN_SPRITE_OFFSET_Y = 11  # distance from his RAM position to his feet
 
     SCREENS_OFFSETS_CUTMAN = [
         {"x": 0, "y": 8},
@@ -378,19 +393,23 @@ class StageReward:
         return reward - self.time_punishment_factor
 
     def wavefront_expansion_reward(self, data):
+        # this didn't end well, but it might be useful in the future:
         # if self.prev_lives is not None and data["lives"] < self.prev_lives:
         #     return -5
         # else:
         #     self.prev_lives = data["lives"]
 
+        # vertically moving to a new screen
+        if (data["camera_y"] != 0) or (
+            # touching spike
+            (data["touching_obj_top"] == SPIKE_VALUE)
+            or (data["touching_obj_side"] == SPIKE_VALUE)
+        ):
+            return 0
+
         screen = data["screen"]
         if screen > self.max_screen:
             self.max_screen = screen
-
-        # TODO: camera Y position is probably a better variable for this
-        # vertically moving to a new screen, everything freezes
-        if data["camera_state"] == 64:
-            return 0
 
         screen_offset = self.screen_offset_map[screen]
 
@@ -399,12 +418,13 @@ class StageReward:
         ) // self.TILE_SIZE
         y = (
             self.SCREEN_HEIGHT * screen_offset["y"]
-            + data["y"]
-            + self.MEGA_MAN_SPRITE_OFFSET_Y
+            # + min(data["y"] + self.MEGA_MAN_SPRITE_OFFSET_Y, 255)
+            + min(data["y"], 239)
+            # + data["y"]
         ) // self.TILE_SIZE
 
         try:
-            distance = self.distance_map[y][x]
+            distance = self.distance_map[y, x]
         except IndexError:
             # out of bounds of the map, probably falling into a pit
             distance = self.prev_distance
