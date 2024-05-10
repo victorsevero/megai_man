@@ -263,6 +263,39 @@ class MultiInputWrapper(gym.Wrapper):
         }
 
 
+class ActionSkipWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        self.B_frame_count = 0
+        self.A_frame_count = 0
+        super().__init__(env)
+
+    def action(self, action):
+        if isinstance(self.action_space, spaces.MultiDiscrete):
+            # if holding B, will shoot every other frame
+            if self.B_frame_count >= 1:
+                action = action.copy()
+                action[0] = 0
+                self.B_frame_count = 0
+            elif action[0]:
+                self.B_frame_count += 1
+            else:
+                self.B_frame_count = 0
+
+            # if holding A, will jump every 20 frames
+            if self.A_frame_count >= 19:
+                action = action.copy()
+                action[3] = 0
+                self.A_frame_count = 0
+            elif action[3]:
+                self.A_frame_count += 1
+            else:
+                self.A_frame_count = 0
+        else:
+            raise NotImplementedError("A/B alternation not implemented")
+
+        return action
+
+
 class StageWrapper(gym.Wrapper):
     def __init__(
         self,

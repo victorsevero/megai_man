@@ -577,10 +577,10 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_steps256_batch512_lr2.5e-04_epochs1_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_smallest_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_multinput_recurrent_1000000_steps"
+    model = "checkpoints/sevs_steps2048_batch16384_lr1.0e-03_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_multinput_recurrent_1000000_steps"
     debugger = Debugger(
-        model=model,
-        deterministic=False,
+        # model=model,
+        deterministic=True,
         frame_by_frame=False,
         graph=False,
     )

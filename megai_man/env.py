@@ -11,6 +11,7 @@ from stable_baselines3.common.vec_env import (
     VecTransposeImage,
 )
 from wrappers import (
+    ActionSkipWrapper,
     FrameskipWrapper,
     MultiInputWrapper,
     StageWrapper,
@@ -107,6 +108,7 @@ def make_env(
         record=record,
         obs_type=obs_type,
     )
+    env = ActionSkipWrapper(env)
     if invincible:
         env.em.add_cheat("VVXXAPSZ")
     if frameskip > 1:

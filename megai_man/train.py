@@ -28,23 +28,24 @@ def train():
         "invincible": False,
         "render_mode": None,
         "fixed_damage_punishment": 1,
-        "forward_factor": 0.1,
-        "backward_factor": 0.11,
+        "forward_factor": 0.5,
+        "backward_factor": 0.55,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
+        "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
-    n_steps = 256
-    # batch_size = n_envs * n_steps
-    batch_size = 512
+    n_steps = 2048
+    batch_size = n_envs * n_steps
+    # batch_size = 512
     # lr = lambda x: 5e-4 * x
-    lr = 2.5e-4
+    lr = 1e-3
 
     model_kwargs = {
         "learning_rate": lr,
         "n_steps": n_steps,
         "batch_size": batch_size,
-        "n_epochs": 1,
+        "n_epochs": 4,
         # future_horizon = frame_skip * frame_time / (1 - gamma) =
         # 4 * (1 / 60) / (1 - 0.995) = 13.3 seconds in real game time
         # that's the future horizon that our agent is capable of planning for
@@ -52,7 +53,7 @@ def train():
         "gae_lambda": 0.9,
         "clip_range": 0.2,
         "normalize_advantage": True,
-        "ent_coef": 1e-2,
+        "ent_coef": 1e-3,
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
         # "features_extractor_kwargs": {"features_dim": 1024},
@@ -74,12 +75,13 @@ def train():
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
         "_crop224"
-        "_smallest_rewards"
+        "_small_rewards"
         f"_time_punishment{time_punishment_factor}"
         # "_trunc6min"
         "_trunc60snoprog"
         "_spikefix6"
         "_scen3"
+        "_actionskip"
         "_multinput"
         "_recurrent"
         # "_INVINCIBLE"
