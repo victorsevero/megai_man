@@ -1,6 +1,11 @@
 import gymnasium as gym
 import torch as th
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from sb3_contrib.ppo_recurrent import MultiInputLstmPolicy
+from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.torch_layers import (
+    BaseFeaturesExtractor,
+    NatureCNN,
+)
 from torch import nn
 
 
@@ -115,3 +120,64 @@ class WideNatureCNN(BaseFeaturesExtractor):
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
+
+
+class CustomCombinedExtractor(BaseFeaturesExtractor):
+    MLP_OUTPUT_DIM = 2
+
+    def __init__(self, observation_space: gym.spaces.Dict, cnn_output_dim=512):
+        super(CustomCombinedExtractor, self).__init__(
+            observation_space, cnn_output_dim + self.MLP_OUTPUT_DIM
+        )
+
+        self.extractors = nn.ModuleDict()
+        total_output_dim = 0
+
+        for key, subspace in observation_space.spaces.items():
+            if (
+                isinstance(subspace, gym.spaces.Box)
+                and len(subspace.shape) == 3
+            ):
+                # CNN for image input
+                self.extractors[key] = NatureCNN(
+                    subspace,
+                    features_dim=cnn_output_dim,
+                )
+                total_output_dim += cnn_output_dim
+            elif (
+                isinstance(subspace, gym.spaces.Box)
+                and len(subspace.shape) == 1
+            ):
+                # "MLP" for vector input ()
+                self.extractors[key] = nn.Identity()
+                total_output_dim += self.MLP_OUTPUT_DIM
+            else:
+                raise ValueError(f"Unsupported observation space: {subspace}")
+
+        self._features_dim = total_output_dim
+
+    def forward(self, observations: dict) -> th.Tensor:
+        return th.cat(
+            [self.extractors[key](observations[key]) for key in observations],
+            dim=1,
+        )
+
+
+class CustomMultiInputPolicy(ActorCriticPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            **kwargs,
+            features_extractor_class=CustomCombinedExtractor,
+            features_extractor_kwargs=dict(cnn_output_dim=512),
+        )
+
+
+class CustomMultiInputLstmPolicy(MultiInputLstmPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args,
+            **kwargs,
+            features_extractor_class=CustomCombinedExtractor,
+            features_extractor_kwargs=dict(cnn_output_dim=512),
+        )

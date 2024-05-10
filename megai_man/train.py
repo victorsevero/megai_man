@@ -2,15 +2,20 @@ from pathlib import Path
 
 from callbacks import MinDistanceCallback
 from env import make_venv
-from policy import DeepNatureCNN, WideNatureCNN
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
+from megai_man.policy import CustomMultiInputLstmPolicy, CustomMultiInputPolicy
+
 
 def train():
+    AlgoClass = RecurrentPPO
+    multi_input = True
     n_envs = 8
     frameskip = 4
-    frame_stack = 2
+    frame_stack = 1
+    time_punishment_factor = 0
     env_kwargs = {
         "n_envs": n_envs,
         "state": "CutMan",
@@ -20,18 +25,20 @@ def train():
         "obs_space": "screen",
         "action_space": "multi_discrete",
         "crop_img": True,
-        "invincible": True,
+        "invincible": False,
         "render_mode": None,
         "fixed_damage_punishment": 1,
         "forward_factor": 0.1,
         "backward_factor": 0.11,
+        "time_punishment_factor": time_punishment_factor,
+        "multi_input": multi_input,
     }
     venv = make_venv(**env_kwargs)
-    n_steps = 16
+    n_steps = 256
     # batch_size = n_envs * n_steps
-    batch_size = 16
+    batch_size = 512
     # lr = lambda x: 5e-4 * x
-    lr = 5e-4
+    lr = 2.5e-4
 
     model_kwargs = {
         "learning_rate": lr,
@@ -68,23 +75,29 @@ def train():
         f"_stack{frame_stack}"
         "_crop224"
         "_smallest_rewards"
+        f"_time_punishment{time_punishment_factor}"
         # "_trunc6min"
         "_trunc60snoprog"
         "_spikefix6"
         "_scen3"
-        "_INVINCIBLE"
+        "_multinput"
+        "_recurrent"
+        # "_INVINCIBLE"
     )
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
-        model = PPO.load(
+        model = AlgoClass.load(
             f"models/{model_name}",
             env=venv,
             device="cuda",
             tensorboard_log=tensorboard_log,
         )
     else:
-        model = PPO(
-            policy="CnnPolicy",
+        model = AlgoClass(
+            # policy="CnnPolicy" if not multi_input else CustomMultiInputPolicy,
+            policy="CnnLstmPolicy"
+            if not multi_input
+            else CustomMultiInputLstmPolicy,
             env=venv,
             tensorboard_log=tensorboard_log,
             verbose=0,

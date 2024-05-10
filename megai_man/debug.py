@@ -3,6 +3,7 @@ import numpy as np
 import pygame
 import torch
 from env import make_venv
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import DQN, PPO
 
 
@@ -22,28 +23,34 @@ class Debugger:
         self.font = pygame.font.SysFont("opensans", self.font_size)
         self.small_font = pygame.font.SysFont("opensans", 12)
         frameskip = 4
+        self.frame_stack = 1
+        self.multi_input = True
         if model is not None and "/dqn_" in model:
             action_space = "discrete"
             ModelClass = DQN
         else:
             action_space = "multi_discrete"
-            ModelClass = PPO
+            if self.frame_stack > 1:
+                ModelClass = PPO
+            else:
+                ModelClass = RecurrentPPO
         self.env = make_venv(
             n_envs=1,
             state="CutMan",
             frameskip=frameskip,
-            frame_stack=2,
+            frame_stack=self.frame_stack,
             truncate_if_no_improvement=True,
             obs_space="screen",
             action_space=action_space,
             crop_img=True,
-            invincible=True,
+            invincible=False,
             render_mode=None,
             record=record,
             damage_terminate=False,
             fixed_damage_punishment=1,
             forward_factor=0.1,
             backward_factor=0.11,
+            multi_input=self.multi_input,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
@@ -73,6 +80,8 @@ class Debugger:
         resize_factor = 5
 
         obs = self.env.reset()
+        if self.multi_input:
+            obs = obs["image"]
         last_obs = obs[0, -1]
         env_height, env_width = last_obs.shape
 
@@ -102,6 +111,7 @@ class Debugger:
         screen = np.transpose(screen.T, (1, 2, 0))
         surface = pygame.surfarray.make_surface(screen)
         surface = pygame.transform.scale_by(surface, self.resize_factor)
+
         self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
 
     def display_info(self, action, probs, vf, infos, reward):
@@ -286,6 +296,7 @@ class Debugger:
                 end_pos,
                 2,
             )
+            pygame.display.flip()
 
     def handle_events(self):
         paused = self.frame_by_frame
@@ -347,8 +358,47 @@ class Debugger:
         )
         pygame.display.flip()
 
+    def draw_arrow(self, vector):
+        vector[1] = -vector[1]
+        arrow_scale = 100
+        vector *= arrow_scale
+        start = (
+            self.resize_factor * (self.env_width + 240 // 2),
+            self.resize_factor * 224 // 2,
+        )
+        end = (start[0] + vector[0], start[1] + vector[1])
+        color = (255, 0, 0)
+
+        if np.array_equal(vector, (0, 0)):
+            pygame.draw.circle(self.screen, color, center=start, radius=5)
+            pygame.display.flip()
+            return
+
+        pygame.draw.line(self.screen, color, start, end, 5)
+        vector_norm = vector / np.linalg.norm(vector)
+        angle = np.arctan2(vector_norm[1], vector_norm[0])
+        arrow_angle = np.pi / 6
+
+        left = end - arrow_scale / 3 * np.array(
+            [np.cos(angle - arrow_angle), np.sin(angle - arrow_angle)]
+        )
+        right = end - arrow_scale / 3 * np.array(
+            [np.cos(angle + arrow_angle), np.sin(angle + arrow_angle)]
+        )
+
+        pygame.draw.polygon(self.screen, color, [end, left, right])
+        pygame.display.flip()
+
     def run(self):
         obs = self.env.reset()
+        if self.multi_input:
+            vector = obs["vector"][0]
+            image = obs["image"]
+        else:
+            image = obs
+        if self.frame_stack == 1:
+            self.lstm_states = None
+            self.episode_starts = np.ones((1,), dtype=bool)
         buttons = ["N/A"]
         action_probs = "N/A"
         vf = "N/A"
@@ -360,7 +410,7 @@ class Debugger:
         self.step = 0
 
         while not done:
-            self.render_screen(obs[0, -1])
+            self.render_screen(image[0, -1])
             self.display_info(
                 ", ".join(buttons),
                 action_probs,
@@ -370,6 +420,8 @@ class Debugger:
             )
             if self.graph:
                 self.display_plots()
+            if self.multi_input:
+                self.draw_arrow(vector)
             pygame.display.flip()
             self.clock.tick(self.desired_fps)
 
@@ -379,7 +431,7 @@ class Debugger:
             if self.record_grayscale_obs:
                 cv2.imwrite(
                     f"dataset/cutman/{self.step}.png",
-                    np.moveaxis(obs[0], 0, -1),
+                    np.moveaxis(image[0], 0, -1),
                 )
 
             if self.model is None:
@@ -387,15 +439,31 @@ class Debugger:
                 action, buttons = self.action_mapper.map_keys(keys)
                 vf = "N/A"
             else:
-                action = self.model.predict(
-                    obs,
-                    deterministic=self.deterministic,
-                )[0][0]
+                if self.frame_stack > 1:
+                    action = self.model.predict(
+                        obs,
+                        deterministic=self.deterministic,
+                    )[0]
+                else:
+                    action, self.lstm_states = self.model.predict(
+                        obs,
+                        state=self.lstm_states,
+                        episode_start=self.episode_starts,
+                        deterministic=self.deterministic,
+                    )
+                action = action[0]
                 buttons = self.retro_env.get_action_meaning(action)
-                if not isinstance(self.model, DQN):
-                    action_probs = self._get_action_probs(obs)
+                # if not isinstance(self.model, DQN) and not self.multi_input:
+                action_probs = self._get_action_probs(obs)
                 vf = self._get_model_vf(obs)
             obs, rewards, dones, infos = self.env.step([action])
+            if self.multi_input:
+                vector = obs["vector"][0]
+                image = obs["image"]
+            else:
+                image = obs
+            if self.frame_stack == 1:
+                self.episode_starts = dones
             cum_reward += rewards[0]
             self.cum_rewards.append(cum_reward)
             done = dones[0]
@@ -408,9 +476,15 @@ class Debugger:
         return self.retro_env.img
 
     def _get_action_probs(self, obs):
-        distribution = self.model.policy.get_distribution(
-            torch.from_numpy(obs).to("cuda")
-        )
+        cuda_obs, _ = self.model.policy.obs_to_tensor(obs)
+        if self.frame_stack > 1:
+            distribution = self.model.policy.get_distribution(cuda_obs)
+        else:
+            distribution = self.model.policy.get_distribution(
+                cuda_obs,
+                [torch.from_numpy(state).cuda() for state in self.lstm_states],
+                torch.tensor(self.episode_starts, dtype=torch.float32).cuda(),
+            )[0]
         probs = [
             x.probs.detach().cpu().numpy()[0]
             for x in distribution.distribution
@@ -442,11 +516,25 @@ class Debugger:
         return ", ".join(lines)
 
     def _get_model_vf(self, obs):
-        cuda_obs = torch.from_numpy(obs).to("cuda")
+        cuda_obs, _ = self.model.policy.obs_to_tensor(obs)
         if isinstance(self.model, DQN):
             value_function = self.model.q_net(cuda_obs)[0].max()
         else:
-            value_function = self.model.policy.predict_values(cuda_obs)[0, 0]
+            if self.frame_stack > 1:
+                value_function = self.model.policy.predict_values(cuda_obs)[
+                    0, 0
+                ]
+            else:
+                value_function = self.model.policy.predict_values(
+                    cuda_obs,
+                    [
+                        torch.from_numpy(state).cuda()
+                        for state in self.lstm_states
+                    ],
+                    torch.tensor(
+                        self.episode_starts, dtype=torch.float32
+                    ).cuda(),
+                )[0, 0]
         value_function = value_function.detach().cpu().numpy()
         return f"{value_function:.2f}"
 
@@ -489,8 +577,14 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    # model = "checkpoints/sevs_steps64_batch64_lr2.5e-04_epochs1_clip0.2_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc60snoprog_spikefix4_INVINCIBLE_5000000_steps"
-    debugger = Debugger(model=model, deterministic=True, graph=True)
+    model = "checkpoints/sevs_steps256_batch512_lr2.5e-04_epochs1_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_smallest_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_multinput_recurrent_1000000_steps"
+    debugger = Debugger(
+        model=model,
+        deterministic=False,
+        frame_by_frame=False,
+        graph=False,
+    )
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)
+    # debugger = Debugger()
     debugger.run()

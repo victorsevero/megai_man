@@ -10,6 +10,37 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
 SPIKE_VALUE = 3
 
 
+class VecRemoveVectorStacks(VecEnvWrapper):
+    def __init__(self, venv: VecEnv):
+        super().__init__(venv)
+        observation_space = venv.observation_space
+        observation_space.spaces["vector"] = self.unwrapped.observation_space[
+            "vector"
+        ]
+
+    def step_wait(self):
+        observations, rewards, dones, infos = self.venv.step_wait()
+        observations, infos = self.observations(observations, infos)
+        return observations, rewards, dones, infos
+
+    def reset(self):
+        """
+        Reset all environments
+        """
+        observation = self.venv.reset()
+        observation, _ = self.observations(observation, {})
+        return observation
+
+    def observations(self, obs, infos):
+        obs["vector"] = obs["vector"][..., -2:]
+        for info in infos:
+            if "terminal_observation" in info:
+                info["terminal_observation"]["vector"] = info[
+                    "terminal_observation"
+                ]["vector"][-2:]
+        return obs, infos
+
+
 class FrameskipWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, skip: int = 4):
         super().__init__(env)
@@ -148,6 +179,88 @@ class VecImageScaling(VecEnvWrapper):
     def reset(self):
         observations = self.venv.reset()
         return observations / 255
+
+
+class MultiInputWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+
+        self.observation_space = gym.spaces.Dict(
+            {
+                "image": gym.spaces.Box(
+                    low=0,
+                    high=255,
+                    shape=(84, 84, 1),
+                    dtype=np.uint8,
+                ),
+                "vector": gym.spaces.Box(
+                    low=-1,
+                    high=1,
+                    shape=(2,),
+                    dtype=np.int16,
+                ),
+            }
+        )
+
+    def reset(self, **kwargs):
+        observation, info = self.env.reset(**kwargs)
+        observation = self.observation(observation)
+        return observation, info
+
+    def step(self, action):
+        observation, reward, terminated, truncated, info = self.env.step(
+            action
+        )
+        return (
+            self.observation(observation),
+            reward,
+            terminated,
+            truncated,
+            info,
+        )
+
+    def observation(self, obs):
+        calculator = self.env.get_wrapper_attr("reward_calculator")
+        vector = [0, 0]
+        if hasattr(calculator, "x"):
+            try:
+                if (
+                    calculator.distance_map[calculator.y, calculator.x + 1]
+                    == calculator.prev_distance - 1
+                ):
+                    vector[0] = 1
+            except IndexError:
+                pass
+            try:
+                if (
+                    calculator.distance_map[calculator.y, calculator.x - 1]
+                    == calculator.prev_distance - 1
+                ):
+                    vector[0] = -1
+            except IndexError:
+                pass
+
+            try:
+                if (
+                    calculator.distance_map[calculator.y - 1, calculator.x]
+                    == calculator.prev_distance - 1
+                ):
+                    vector[1] = 1
+            except IndexError:
+                pass
+            try:
+                if (
+                    calculator.distance_map[calculator.y + 1, calculator.x]
+                    == calculator.prev_distance - 1
+                ):
+                    vector[1] = -1
+            except IndexError:
+                pass
+
+        return {
+            "image": obs,
+            "vector": np.array(vector, dtype=np.int16),
+        }
 
 
 class StageWrapper(gym.Wrapper):
@@ -413,10 +526,10 @@ class StageReward:
 
         screen_offset = self.screen_offset_map[screen]
 
-        x = (
+        self.x = (
             self.SCREEN_WIDTH * screen_offset["x"] + data["x"]
         ) // self.TILE_SIZE
-        y = (
+        self.y = (
             self.SCREEN_HEIGHT * screen_offset["y"]
             # + min(data["y"] + self.MEGA_MAN_SPRITE_OFFSET_Y, 255)
             + min(data["y"], 239)
@@ -424,7 +537,7 @@ class StageReward:
         ) // self.TILE_SIZE
 
         try:
-            distance = self.distance_map[y, x]
+            distance = self.distance_map[self.y, self.x]
         except IndexError:
             # out of bounds of the map, probably falling into a pit
             distance = self.prev_distance

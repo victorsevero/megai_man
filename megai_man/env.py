@@ -10,7 +10,13 @@ from stable_baselines3.common.vec_env import (
     VecMonitor,
     VecTransposeImage,
 )
-from wrappers import FrameskipWrapper, StageWrapper, WarpFrame
+from wrappers import (
+    FrameskipWrapper,
+    MultiInputWrapper,
+    StageWrapper,
+    VecRemoveVectorStacks,
+    WarpFrame,
+)
 
 retro.data.Integrations.add_custom_path(
     str(Path(__file__).parent / "custom_integrations")
@@ -29,6 +35,7 @@ def make_venv(
     invincible=False,
     render_mode="human",
     record=False,
+    multi_input=False,
     _enforce_subproc=False,
     **stage_wrapper_kwargs,
 ):
@@ -43,6 +50,7 @@ def make_venv(
             invincible=invincible,
             render_mode=render_mode,
             record=record,
+            multi_input=multi_input,
             **stage_wrapper_kwargs,
         )
 
@@ -53,6 +61,8 @@ def make_venv(
     if obs_space == "screen":
         venv = VecFrameStack(venv, n_stack=frame_stack)
         venv = VecTransposeImage(venv)
+        if multi_input:
+            venv = VecRemoveVectorStacks(venv)
     venv = VecMonitor(
         venv,
         info_keywords=("distance", "min_distance", "max_screen", "hp"),
@@ -70,6 +80,7 @@ def make_env(
     invincible=False,
     render_mode="human",
     record=False,
+    multi_input=False,
     **stage_wrapper_kwargs,
 ):
     if obs_space == "screen":
@@ -113,6 +124,9 @@ def make_env(
     )
     if obs_space == "screen":
         env = WarpFrame(env, crop=crop_img)
+
+    if multi_input:
+        env = MultiInputWrapper(env)
     return env
 
 
