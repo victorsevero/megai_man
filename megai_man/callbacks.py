@@ -70,6 +70,21 @@ class MinDistanceCallback(BaseCallback):
             )
 
 
+class CurriculumCallback(BaseCallback):
+    def __init__(self, freq: int, verbose: int = 0):
+        super().__init__(verbose=verbose)
+        self.freq = freq
+        self.screen = 0
+
+    def _on_step(self) -> bool:
+        if self.n_calls % self.freq == 0:
+            self.screen += 1
+            self.training_env.set_attr("target_screen", self.screen)
+        self.logger.record("rollout/curriculum_screen", self.screen)
+
+        return True
+
+
 class StopTrainingOnTimeBudget(BaseCallback):
     def __init__(self, budget: int, verbose: int = 0):
         super().__init__(verbose=verbose)

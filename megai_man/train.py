@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from callbacks import MinDistanceCallback
+from callbacks import CurriculumCallback, MinDistanceCallback
 from env import make_venv
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
@@ -19,6 +19,7 @@ def train():
     env_kwargs = {
         "n_envs": n_envs,
         "state": "CutMan",
+        "screen": 0,
         "frameskip": frameskip,
         "frame_stack": frame_stack,
         "truncate_if_no_improvement": True,
@@ -35,11 +36,11 @@ def train():
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
-    n_steps = 2048
+    n_steps = 256
     batch_size = n_envs * n_steps
     # batch_size = 512
     # lr = lambda x: 5e-4 * x
-    lr = 1e-3
+    lr = 5e-4
 
     model_kwargs = {
         "learning_rate": lr,
@@ -50,7 +51,7 @@ def train():
         # 4 * (1 / 60) / (1 - 0.995) = 13.3 seconds in real game time
         # that's the future horizon that our agent is capable of planning for
         "gamma": 0.99,
-        "gae_lambda": 0.9,
+        "gae_lambda": 0.95,
         "clip_range": 0.2,
         "normalize_advantage": True,
         "ent_coef": 1e-3,
@@ -62,6 +63,7 @@ def train():
 
     model_name = (
         "sevs"
+        f"_{'all' if env_kwargs['screen'] is None else env_kwargs['screen']}"
         f"_steps{n_steps}_batch{batch_size}"
         f"_lr{model_kwargs['learning_rate']:.1e}"
         # "_lrLin5e-4"
@@ -84,6 +86,7 @@ def train():
         "_actionskip"
         "_multinput"
         "_recurrent"
+        "_curriculum500k"
         # "_INVINCIBLE"
     )
     tensorboard_log = "logs/cutman"
@@ -107,7 +110,7 @@ def train():
             device="cuda",
             **model_kwargs,
         )
-    total_timesteps = 10_000_000
+    total_timesteps = 20_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",
@@ -118,13 +121,14 @@ def train():
         make_venv(**{**env_kwargs, "n_envs": 1}),
         n_eval_episodes=1,
         eval_freq=250_000 // n_envs,
-        best_model_save_path=f"models/{model_name}",
+        best_model_save_path=f"models/{model_name}_best",
         verbose=0,
     )
     model.learn(
         total_timesteps=total_timesteps,
         callback=[
             MinDistanceCallback(),
+            CurriculumCallback(freq=500_000 // n_envs),
             checkpoint_callback,
             eval_callback,
         ],

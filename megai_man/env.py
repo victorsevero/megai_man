@@ -15,6 +15,7 @@ from wrappers import (
     FrameskipWrapper,
     MultiInputWrapper,
     StageWrapper,
+    TargetScreenWrapper,
     VecRemoveVectorStacks,
     WarpFrame,
 )
@@ -129,6 +130,7 @@ def make_env(
 
     if multi_input:
         env = MultiInputWrapper(env)
+    env = TargetScreenWrapper(env)
     return env
 
 

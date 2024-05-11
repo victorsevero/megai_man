@@ -263,6 +263,24 @@ class MultiInputWrapper(gym.Wrapper):
         }
 
 
+class TargetScreenWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.env.get_wrapper_attr("target_screen")
+
+    @property
+    def target_screen(self):
+        return self._target_screen
+
+    @target_screen.setter
+    def target_screen(self, new_screen):
+        self._target_screen = new_screen
+        env = self.env
+        while not isinstance(env, StageWrapper):
+            env = env.env
+        env.target_screen = new_screen
+
+
 class ActionSkipWrapper(gym.ActionWrapper):
     def __init__(self, env):
         self.B_frame_count = 0
@@ -303,6 +321,7 @@ class StageWrapper(gym.Wrapper):
         frameskip,
         obs_space="screen",
         stage=0,
+        screen=None,
         damage_terminate=False,
         damage_factor=1,
         fixed_damage_punishment=0,
@@ -320,6 +339,7 @@ class StageWrapper(gym.Wrapper):
             backward_factor,
             time_punishment_factor / frameskip,
         )
+        self.target_screen = screen
         self.damage_terminate = damage_terminate
         self.truncate_if_no_improvement = truncate_if_no_improvement
         # max number of frames: NES' FPS * seconds // frameskip
@@ -421,20 +441,30 @@ class StageWrapper(gym.Wrapper):
     def terminated(self, terminated):
         data = self.unwrapped.data
 
+        # finish screen
+        target_screen = self.target_screen
+        if target_screen is not None and data["screen"] > target_screen:
+            return True
+
+        # health condition
         if self.damage_terminate:
-            health_condition = data["health"] < self.prev_health
-        else:
-            health_condition = data["health"] == 0
+            if data["health"] < self.prev_health:
+                return True
+        if data["health"] == 0:
+            return True
 
-        life_lost = data["lives"] < self.prev_lives
+        # life lost
+        if data["lives"] < self.prev_lives:
+            return True
 
-        touched_spike = (
+        # touched spike
+        if (
             data["touching_obj_top"] == SPIKE_VALUE
             or data["touching_obj_side"] == SPIKE_VALUE
-        )
+        ):
+            return True
 
-        # fully damaged or suddenly lost one life or touched a spike
-        return terminated or health_condition or life_lost or touched_spike
+        return terminated
 
     def truncated(self, truncated):
         return truncated or (
