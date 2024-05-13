@@ -19,26 +19,28 @@ def train():
     env_kwargs = {
         "n_envs": n_envs,
         "state": "CutMan",
-        "screen": 0,
+        "screen": None,
         "frameskip": frameskip,
         "frame_stack": frame_stack,
         "truncate_if_no_improvement": True,
         "obs_space": "screen",
         "action_space": "multi_discrete",
         "crop_img": True,
-        "invincible": False,
+        "invincible": True,
+        "no_enemies": False,
         "render_mode": None,
         "fixed_damage_punishment": 1,
         "forward_factor": 0.25,
         "backward_factor": 0.3,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
+        "curriculum": False,
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
     n_steps = 512
     batch_size = n_envs * n_steps
-    # batch_size = 512
+    # batch_size = 64
     # lr = lambda x: 5e-4 * x
     lr = 2.5e-4
 
@@ -54,7 +56,7 @@ def train():
         "gae_lambda": 0.95,
         "clip_range": 0.2,
         "normalize_advantage": True,
-        "ent_coef": 1e-3,
+        "ent_coef": 1e-2,
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
         # "features_extractor_kwargs": {"features_dim": 1024},
@@ -86,8 +88,9 @@ def train():
         "_actionskipB"
         "_multinput"
         "_recurrent"
-        "_curriculum500k"
-        # "_INVINCIBLE"
+        # "_curriculum500k"
+        "_INVINCIBLE"
+        # "_NO_ENEMIES"
     )
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
@@ -128,7 +131,7 @@ def train():
         total_timesteps=total_timesteps,
         callback=[
             MinDistanceCallback(),
-            CurriculumCallback(freq=500_000 // n_envs),
+            # CurriculumCallback(freq=500_000 // n_envs),
             checkpoint_callback,
             eval_callback,
         ],

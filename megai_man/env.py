@@ -38,6 +38,7 @@ def make_venv(
     render_mode="human",
     record=False,
     multi_input=False,
+    curriculum=False,
     _enforce_subproc=False,
     **stage_wrapper_kwargs,
 ):
@@ -53,6 +54,7 @@ def make_venv(
             render_mode=render_mode,
             record=record,
             multi_input=multi_input,
+            curriculum=curriculum,
             **stage_wrapper_kwargs,
         )
 
@@ -83,6 +85,7 @@ def make_env(
     render_mode="human",
     record=False,
     multi_input=False,
+    curriculum=False,
     **stage_wrapper_kwargs,
 ):
     if obs_space == "screen":
@@ -111,7 +114,7 @@ def make_env(
     )
     env = ActionSkipWrapper(env)
     if invincible:
-        env.em.add_cheat("VVXXAPSZ")
+        env.unwrapped.em.add_cheat("VVXXAPSZ")
     if frameskip > 1:
         env = FrameskipWrapper(env, skip=frameskip)
     if not truncate_if_no_improvement:
@@ -130,7 +133,8 @@ def make_env(
 
     if multi_input:
         env = MultiInputWrapper(env)
-    env = TargetScreenWrapper(env)
+    if curriculum:
+        env = TargetScreenWrapper(env)
     return env
 
 

@@ -323,6 +323,8 @@ class ActionSkipWrapper(gym.ActionWrapper):
 
 
 class StageWrapper(gym.Wrapper):
+    NO_ENEMIES_CHEATCODE = "NNLOGO"
+
     def __init__(
         self,
         env,
@@ -337,6 +339,7 @@ class StageWrapper(gym.Wrapper):
         backward_factor=1,
         time_punishment_factor=0,
         truncate_if_no_improvement=True,
+        no_enemies=False,
     ):
         super().__init__(env)
         self.reward_calculator = StageReward(
@@ -357,9 +360,20 @@ class StageWrapper(gym.Wrapper):
             self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(53,))
         self.obs_space = obs_space
 
+        self.no_enemies = no_enemies
+
     def reset(self, **kwargs):
+        if self.no_enemies:
+            self.unwrapped.em.clear_cheats()
         self.reward_calculator.reset()
         observation, info = self.env.reset(**kwargs)
+        if self.no_enemies:
+            # TODO: NOT WORKING, BREAKS THE GAME WHEN RESET
+            for _ in range(1):
+                observation, *_, info = self.env.step(
+                    np.zeros(self.action_space.shape, dtype=np.int64)
+                )
+            self.unwrapped.em.add_cheat(self.NO_ENEMIES_CHEATCODE)
         self.prev_lives = self.unwrapped.data["lives"]
         if self.damage_terminate:
             self.prev_health = self.unwrapped.data["health"]
@@ -372,6 +386,10 @@ class StageWrapper(gym.Wrapper):
             )
             if self.unwrapped.data["camera_y"] == 0:
                 break
+
+        if (terminated or truncated) and self.no_enemies:
+            self.env.unwrapped.em.clear_cheats()
+
         return (
             self.observation(observation),
             self.reward(reward),

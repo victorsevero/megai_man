@@ -1,16 +1,25 @@
+import numpy as np
 from env import make_venv
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 
 
-def evaluate_policy_details(model, env):
+def evaluate_policy_details(model: RecurrentPPO, env):
     obs = env.reset()
-    done = False
+    states = None
+    dones = [False]
+    episode_starts = np.ones((1,), dtype=bool)
     current_length = 0
-    while not done:
-        actions, _ = model.predict(obs, state=None, deterministic=True)
+    while not dones[0]:
+        actions, states = model.predict(
+            obs,
+            state=states,
+            episode_start=episode_starts,
+            deterministic=True,
+        )
         action = env.unwrapped.envs[0].unwrapped.get_action_meaning(actions[0])
         obs, rewards, dones, infos = env.step(actions)
-        done = dones[0]
+        episode_starts = dones
         current_length += 1
         print(f"Action: {action}")
         print(f"Reward: {rewards[0]}")
@@ -24,27 +33,33 @@ def test():
     venv = make_venv(
         n_envs=1,
         state="CutMan",
+        screen=None,
         frameskip=4,
-        frame_stack=2,
+        frame_stack=1,
         truncate_if_no_improvement=True,
         obs_space="screen",
         action_space="multi_discrete",
         crop_img=True,
-        invincible=True,
+        invincible=False,
         render_mode="human",
         record=".",
         damage_terminate=False,
         fixed_damage_punishment=1,
-        forward_factor=0.1,
-        backward_factor=0.11,
+        forward_factor=0.25,
+        backward_factor=0.3,
+        multi_input=True,
     )
     model_name = (
         "checkpoints/"
-        "sevs_lr2.5e-04_epochs1_gamma0.995_gae0.9_clip0.2_normyes_ecoef1e-03__fs4_stack2_crop224_death10_smallest_rewards_trunc1minnoprog_INVINCIBLE"
-        "_2000000_steps"
+        "sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE"
+        "_4000000_steps"
     )
-    model_name = "models/sevs_steps16_batch16_lr2.5e-04_epochs1_clip0.2_ecoef1e-02__fs4_stack2_crop224_smallest_rewards_trunc60snoprog_spikefix3_scen3_INVINCIBLE/best_model.zip"
-    model = PPO.load(model_name, env=venv)
+    # model_name = (
+    #     "models/"
+    #     "sevs_0_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_curriculum500k"
+    #     ".zip"
+    # )
+    model = RecurrentPPO.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv)
 

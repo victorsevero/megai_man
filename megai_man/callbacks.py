@@ -31,7 +31,7 @@ class MinDistanceCallback(BaseCallback):
             # TODO: log min/max rewards?
             # self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
             hps = [ep_info["hp"] for ep_info in self.model.ep_info_buffer]
-            self.logger.record("rollout/final_hp_max", max(hps))
+            # self.logger.record("rollout/final_hp_max", max(hps))
             self.logger.record("rollout/final_hp_min", min(hps))
             self.logger.record("rollout/final_hp_mean", safe_mean(hps))
 

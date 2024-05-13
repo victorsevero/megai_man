@@ -44,13 +44,14 @@ class Debugger:
             obs_space="screen",
             action_space=action_space,
             crop_img=True,
-            invincible=False,
+            invincible=True,
+            no_enemies=False,
             render_mode=None,
             record=record,
             damage_terminate=False,
             fixed_damage_punishment=1,
-            forward_factor=0.5,
-            backward_factor=0.55,
+            forward_factor=0.25,
+            backward_factor=0.3,
             multi_input=self.multi_input,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
@@ -80,11 +81,10 @@ class Debugger:
         width, height = 240, 224
         resize_factor = 5
 
-        obs = self.env.reset()
+        obs_space = self.env.observation_space
         if self.multi_input:
-            obs = obs["image"]
-        last_obs = obs[0, -1]
-        env_height, env_width = last_obs.shape
+            obs_space = obs_space["image"]
+        env_height, env_width = obs_space.shape[1:]
 
         self.text_area_width = 800
         self.screen = pygame.display.set_mode(
@@ -442,10 +442,10 @@ class Debugger:
                 vf = "N/A"
             else:
                 if self.frame_stack > 1:
-                    action = self.model.predict(
+                    action, _ = self.model.predict(
                         obs,
                         deterministic=self.deterministic,
-                    )[0]
+                    )
                 else:
                     action, self.lstm_states = self.model.predict(
                         obs,
@@ -579,13 +579,13 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_0_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_curriculum500k_4000000_steps"
-    # model = "models/sevs_0_steps256_batch2048_lr5.0e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskip_multinput_recurrent_curriculum500k"
+    model = "checkpoints/sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE_4000000_steps"
+    # model = "models/sevs_0_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_curriculum500k.zip"
     debugger = Debugger(
         model=model,
         deterministic=True,
         frame_by_frame=False,
-        graph=True,
+        graph=False,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)
