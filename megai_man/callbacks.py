@@ -1,8 +1,11 @@
 from pathlib import Path
 from time import time
 
+import torch as th
 from PIL import Image
+from rllte.xplore.reward import RE3
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.utils import safe_mean
 from wrappers import StageReward
 
@@ -83,6 +86,54 @@ class CurriculumCallback(BaseCallback):
         self.logger.record("rollout/curriculum_screen", self.screen)
 
         return True
+
+
+class RE3Callback(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+        self.buffer = None
+        self.device = "cuda"
+
+    def init_callback(self, model):
+        super().init_callback(model)
+        assert isinstance(
+            self.model, OnPolicyAlgorithm
+        ), "support for off-policy algorithms will be added soon!!!"
+        self.buffer = self.model.rollout_buffer
+        self.irs = RE3(self.training_env, device=self.device)
+
+    def _on_step(self) -> bool:
+        observations = self.locals["obs_tensor"]
+        actions = th.as_tensor(self.locals["actions"], device=self.device)
+        rewards = th.as_tensor(self.locals["rewards"], device=self.device)
+        dones = th.as_tensor(self.locals["dones"], device=self.device)
+        next_observations = th.as_tensor(
+            self.locals["new_obs"],
+            device=self.device,
+        )
+
+        self.irs.watch(
+            observations, actions, rewards, dones, dones, next_observations
+        )
+        return True
+
+    def _on_rollout_end(self):
+        obs = th.as_tensor(self.buffer.observations, device=self.device)
+        actions = th.as_tensor(self.buffer.actions, device=self.device)
+        rewards = th.as_tensor(self.buffer.rewards, device=self.device)
+        dones = th.as_tensor(self.buffer.episode_starts, device=self.device)
+        intrinsic_rewards = self.irs.compute(
+            samples=dict(
+                observations=obs,
+                actions=actions,
+                rewards=rewards,
+                terminateds=dones,
+                truncateds=dones,
+                next_observations=obs,
+            )
+        )
+        self.buffer.advantages += intrinsic_rewards.cpu().numpy()
+        self.buffer.returns += intrinsic_rewards.cpu().numpy()
 
 
 class StopTrainingOnTimeBudget(BaseCallback):

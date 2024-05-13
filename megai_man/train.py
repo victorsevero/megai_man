@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from callbacks import CurriculumCallback, MinDistanceCallback
+from callbacks import CurriculumCallback, MinDistanceCallback, RE3Callback
 from env import make_venv
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
@@ -26,12 +26,12 @@ def train():
         "obs_space": "screen",
         "action_space": "multi_discrete",
         "crop_img": True,
-        "invincible": True,
+        "invincible": False,
         "no_enemies": False,
         "render_mode": None,
         "fixed_damage_punishment": 1,
         "forward_factor": 0.25,
-        "backward_factor": 0.3,
+        "backward_factor": 0.5,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
         "curriculum": False,
@@ -56,7 +56,7 @@ def train():
         "gae_lambda": 0.95,
         "clip_range": 0.2,
         "normalize_advantage": True,
-        "ent_coef": 1e-2,
+        "ent_coef": 1e-3,
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
         # "features_extractor_kwargs": {"features_dim": 1024},
@@ -79,7 +79,7 @@ def train():
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
         "_crop224"
-        "_small_rewards2"
+        "small_rewards3"
         f"_time_punishment{time_punishment_factor}"
         # "_trunc6min"
         "_trunc60snoprog"
@@ -88,8 +88,9 @@ def train():
         "_actionskipB"
         "_multinput"
         "_recurrent"
+        # "_RE3"
         # "_curriculum500k"
-        "_INVINCIBLE"
+        # "_INVINCIBLE"
         # "_NO_ENEMIES"
     )
     tensorboard_log = "logs/cutman"
@@ -130,6 +131,7 @@ def train():
     model.learn(
         total_timesteps=total_timesteps,
         callback=[
+            # RE3Callback(),
             MinDistanceCallback(),
             # CurriculumCallback(freq=500_000 // n_envs),
             checkpoint_callback,
