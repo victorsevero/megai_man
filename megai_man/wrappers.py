@@ -11,6 +11,8 @@ SPIKE_VALUE = 3
 
 
 class VecRemoveVectorStacks(VecEnvWrapper):
+    VECTOR_SIZE = 3
+
     def __init__(self, venv: VecEnv):
         super().__init__(venv)
         observation_space = venv.observation_space
@@ -32,12 +34,12 @@ class VecRemoveVectorStacks(VecEnvWrapper):
         return observation
 
     def observations(self, obs, infos):
-        obs["vector"] = obs["vector"][..., -2:]
+        obs["vector"] = obs["vector"][..., -self.VECTOR_SIZE :]
         for info in infos:
             if "terminal_observation" in info:
                 info["terminal_observation"]["vector"] = info[
                     "terminal_observation"
-                ]["vector"][-2:]
+                ]["vector"][-self.VECTOR_SIZE :]
         return obs, infos
 
 
@@ -196,13 +198,15 @@ class MultiInputWrapper(gym.Wrapper):
                 "vector": gym.spaces.Box(
                     low=-1,
                     high=1,
-                    shape=(2,),
+                    shape=(3,),
                     dtype=np.int16,
                 ),
             }
         )
+        self.last_A = 0
 
     def reset(self, **kwargs):
+        self.last_A = 0
         observation, info = self.env.reset(**kwargs)
         observation = self.observation(observation)
         return observation, info
@@ -211,8 +215,10 @@ class MultiInputWrapper(gym.Wrapper):
         observation, reward, terminated, truncated, info = self.env.step(
             action
         )
+        observation = self.observation(observation)
+        self.last_A = action[3]
         return (
-            self.observation(observation),
+            observation,
             reward,
             terminated,
             truncated,
@@ -221,7 +227,7 @@ class MultiInputWrapper(gym.Wrapper):
 
     def observation(self, obs):
         calculator = self.env.get_wrapper_attr("reward_calculator")
-        vector = [0, 0]
+        vector = [0, 0, 0]
         if hasattr(calculator, "x"):
             try:
                 if (
@@ -256,6 +262,8 @@ class MultiInputWrapper(gym.Wrapper):
                     vector[1] = -1
             except IndexError:
                 pass
+
+        vector[2] = self.last_A
 
         return {
             "image": obs,
@@ -300,14 +308,14 @@ class ActionSkipWrapper(gym.ActionWrapper):
                 self.B_frame_count = 0
 
             # if holding A, will jump every 20 frames
-            if self.A_frame_count >= 19:
-                action = action.copy()
-                action[3] = 0
-                self.A_frame_count = 0
-            elif action[3]:
-                self.A_frame_count += 1
-            else:
-                self.A_frame_count = 0
+            # if self.A_frame_count >= 19:
+            #     action = action.copy()
+            #     action[3] = 0
+            #     self.A_frame_count = 0
+            # elif action[3]:
+            #     self.A_frame_count += 1
+            # else:
+            #     self.A_frame_count = 0
         else:
             raise NotImplementedError("A/B alternation not implemented")
 

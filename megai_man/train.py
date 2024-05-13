@@ -29,18 +29,18 @@ def train():
         "invincible": False,
         "render_mode": None,
         "fixed_damage_punishment": 1,
-        "forward_factor": 0.5,
-        "backward_factor": 0.55,
+        "forward_factor": 0.25,
+        "backward_factor": 0.3,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
-    n_steps = 256
+    n_steps = 512
     batch_size = n_envs * n_steps
     # batch_size = 512
     # lr = lambda x: 5e-4 * x
-    lr = 5e-4
+    lr = 2.5e-4
 
     model_kwargs = {
         "learning_rate": lr,
@@ -77,13 +77,13 @@ def train():
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
         "_crop224"
-        "_small_rewards"
+        "_small_rewards2"
         f"_time_punishment{time_punishment_factor}"
         # "_trunc6min"
         "_trunc60snoprog"
         "_spikefix6"
         "_scen3"
-        "_actionskip"
+        "_actionskipB"
         "_multinput"
         "_recurrent"
         "_curriculum500k"
@@ -118,7 +118,7 @@ def train():
     )
     eval_callback = EvalCallback(
         # same env, just replacing n_envs with 1
-        make_venv(**{**env_kwargs, "n_envs": 1}),
+        make_venv(**{**env_kwargs, "n_envs": 1, "screen": None}),
         n_eval_episodes=1,
         eval_freq=250_000 // n_envs,
         best_model_save_path=f"models/{model_name}_best",

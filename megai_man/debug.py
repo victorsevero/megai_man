@@ -37,7 +37,7 @@ class Debugger:
         self.env = make_venv(
             n_envs=1,
             state="CutMan",
-            screen=0,
+            screen=None,
             frameskip=frameskip,
             frame_stack=self.frame_stack,
             truncate_if_no_improvement=True,
@@ -49,8 +49,8 @@ class Debugger:
             record=record,
             damage_terminate=False,
             fixed_damage_punishment=1,
-            forward_factor=0.1,
-            backward_factor=0.11,
+            forward_factor=0.5,
+            backward_factor=0.55,
             multi_input=self.multi_input,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
@@ -361,6 +361,7 @@ class Debugger:
 
     def draw_arrow(self, vector):
         vector[1] = -vector[1]
+        vector = vector[:2]
         arrow_scale = 100
         vector *= arrow_scale
         start = (
@@ -578,13 +579,13 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_steps2048_batch16384_lr1.0e-03_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskip_multinput_recurrent_1000000_steps"
-    model = "models/sevs_0_steps256_batch2048_lr5.0e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskip_multinput_recurrent/best_model"
+    model = "checkpoints/sevs_0_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_curriculum500k_4000000_steps"
+    # model = "models/sevs_0_steps256_batch2048_lr5.0e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskip_multinput_recurrent_curriculum500k"
     debugger = Debugger(
         model=model,
         deterministic=True,
         frame_by_frame=False,
-        graph=False,
+        graph=True,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)

@@ -123,7 +123,7 @@ class WideNatureCNN(BaseFeaturesExtractor):
 
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
-    MLP_OUTPUT_DIM = 2
+    MLP_OUTPUT_DIM = 3
 
     def __init__(self, observation_space: gym.spaces.Dict, cnn_output_dim=512):
         super(CustomCombinedExtractor, self).__init__(
