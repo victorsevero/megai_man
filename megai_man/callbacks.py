@@ -1,27 +1,18 @@
 from pathlib import Path
 from time import time
 
+import numpy as np
 import torch as th
 from PIL import Image
 from rllte.xplore.reward import RE3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.utils import safe_mean
-from wrappers import StageReward
 
 
-class MinDistanceCallback(BaseCallback):
-    def __init__(self, verbose=0, show_image=False):
+class StageLoggingCallback(BaseCallback):
+    def __init__(self, verbose=0):
         super().__init__(verbose)
-        self.show_image = show_image
-        if self.show_image:
-            self.bg = Image.open(
-                Path("images/bg") / "MegaManMapCutManBG.png"
-            ).convert("RGBA")
-            sprite = Image.open(Path("images") / "mm_sprite.png").convert(
-                "RGBA"
-            )
-            self.sprite = sprite.resize([int(1.5 * x) for x in sprite.size])
 
     def _on_step(self) -> bool:
         return True
@@ -34,7 +25,6 @@ class MinDistanceCallback(BaseCallback):
             # TODO: log min/max rewards?
             # self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
             hps = [ep_info["hp"] for ep_info in self.model.ep_info_buffer]
-            # self.logger.record("rollout/final_hp_max", max(hps))
             self.logger.record("rollout/final_hp_min", min(hps))
             self.logger.record("rollout/final_hp_mean", safe_mean(hps))
 
@@ -134,6 +124,33 @@ class RE3Callback(BaseCallback):
         )
         self.buffer.advantages += intrinsic_rewards.cpu().numpy()
         self.buffer.returns += intrinsic_rewards.cpu().numpy()
+
+
+class TrainingStatsLoggerCallback(BaseCallback):
+    def __init__(self, verbose=0):
+        super().__init__(verbose)
+
+    def _on_step(self) -> bool:
+        return True
+
+    def _on_rollout_end(self) -> None:
+        rollout_buffer = self.model.rollout_buffer
+
+        rewards = rollout_buffer.rewards
+        rewards = np.hstack(rewards)
+        self.logger.record("dists/rewards", th.from_numpy(rewards))
+
+        value_targets = rollout_buffer.returns
+        value_targets = np.hstack(value_targets)
+        self.logger.record("dists/value_targets", th.from_numpy(value_targets))
+
+        values = rollout_buffer.values
+        values = np.hstack(values)
+        self.logger.record("dists/values", th.from_numpy(values))
+
+        advs = rollout_buffer.advantages
+        advs = np.hstack(advs)
+        self.logger.record("dists/advantages", th.from_numpy(advs))
 
 
 class StopTrainingOnTimeBudget(BaseCallback):

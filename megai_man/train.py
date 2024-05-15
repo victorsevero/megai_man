@@ -1,10 +1,16 @@
 from pathlib import Path
 
-from callbacks import CurriculumCallback, MinDistanceCallback, RE3Callback
+from callbacks import (
+    CurriculumCallback,
+    RE3Callback,
+    StageLoggingCallback,
+    TrainingStatsLoggerCallback,
+)
 from env import make_venv
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines3.common.vec_env import VecNormalize
 
 from megai_man.policy import CustomMultiInputLstmPolicy, CustomMultiInputPolicy
 
@@ -29,20 +35,28 @@ def train():
         "invincible": False,
         "no_enemies": False,
         "render_mode": None,
-        "fixed_damage_punishment": 1,
-        "forward_factor": 0.25,
-        "backward_factor": 0.5,
+        "fixed_damage_punishment": 2,
+        "forward_factor": 0.5,
+        "backward_factor": 1,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
         "curriculum": False,
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
-    n_steps = 512
-    batch_size = n_envs * n_steps
-    # batch_size = 64
-    # lr = lambda x: 5e-4 * x
-    lr = 2.5e-4
+    venv = VecNormalize(
+        venv,
+        training=True,
+        norm_obs=False,
+        norm_reward=True,
+        gamma=0.995,
+        clip_reward=10,
+    )
+    n_steps = 1024
+    # batch_size = n_envs * n_steps
+    batch_size = 64
+    lr = lambda x: 4e-4 * x
+    # lr = 4e-4
 
     model_kwargs = {
         "learning_rate": lr,
@@ -52,11 +66,12 @@ def train():
         # future_horizon = frame_skip * frame_time / (1 - gamma) =
         # 4 * (1 / 60) / (1 - 0.995) = 13.3 seconds in real game time
         # that's the future horizon that our agent is capable of planning for
-        "gamma": 0.99,
+        "gamma": 0.995,
         "gae_lambda": 0.95,
-        "clip_range": 0.2,
+        "clip_range": 0.1,
         "normalize_advantage": True,
-        "ent_coef": 1e-3,
+        "ent_coef": 3e-3,
+        # "policy_kwargs": dict(net_arch=[dict(pi=[256, 256], vf=[256, 256])])
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
         # "features_extractor_kwargs": {"features_dim": 1024},
@@ -67,19 +82,20 @@ def train():
         "sevs"
         f"_{'all' if env_kwargs['screen'] is None else env_kwargs['screen']}"
         f"_steps{n_steps}_batch{batch_size}"
-        f"_lr{model_kwargs['learning_rate']:.1e}"
-        # "_lrLin5e-4"
+        # f"_lr{model_kwargs['learning_rate']:.1e}"
+        "_lrLin4e-4"
         f"_epochs{model_kwargs['n_epochs']}"
         f"_clip{model_kwargs['clip_range']}"
         f"_ecoef{model_kwargs['ent_coef']:.0e}"
         f"_gamma{model_kwargs['gamma']}"
-        # "_wide"
+        # "_wide_pivf"
+        "_rewnorm2"
         # "_featdim1024"
         "_"  # for separating env parameters
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
         "_crop224"
-        "small_rewards3"
+        "common_rews"
         f"_time_punishment{time_punishment_factor}"
         # "_trunc6min"
         "_trunc60snoprog"
@@ -114,15 +130,31 @@ def train():
             device="cuda",
             **model_kwargs,
         )
-    total_timesteps = 20_000_000
+    total_timesteps = 2_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",
         name_prefix=model_name,
     )
+    eval_venv = make_venv(
+        **{
+            **env_kwargs,
+            "n_envs": 1,
+            "screen": None,
+            "render_mode": None,
+        }
+    )
+    eval_venv = VecNormalize(
+        eval_venv,
+        training=False,
+        norm_obs=False,
+        norm_reward=True,
+        gamma=0.995,
+        clip_reward=10,
+    )
     eval_callback = EvalCallback(
         # same env, just replacing n_envs with 1
-        make_venv(**{**env_kwargs, "n_envs": 1, "screen": None}),
+        eval_venv,
         n_eval_episodes=1,
         eval_freq=250_000 // n_envs,
         best_model_save_path=f"models/{model_name}_best",
@@ -132,8 +164,9 @@ def train():
         total_timesteps=total_timesteps,
         callback=[
             # RE3Callback(),
-            MinDistanceCallback(),
+            StageLoggingCallback(),
             # CurriculumCallback(freq=500_000 // n_envs),
+            TrainingStatsLoggerCallback(),
             checkpoint_callback,
             eval_callback,
         ],

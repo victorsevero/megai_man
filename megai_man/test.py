@@ -51,8 +51,8 @@ def test():
     )
     model_name = (
         "checkpoints/"
-        "sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE"
-        "_4000000_steps"
+        "sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224small_rewards3_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent"
+        "_3000000_steps"
     )
     # model_name = (
     #     "models/"
