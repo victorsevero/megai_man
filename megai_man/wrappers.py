@@ -381,9 +381,7 @@ class StageWrapper(gym.Wrapper):
 
     def step(self, action):
         while True:
-            observation, reward, terminated, truncated, info = self.env.step(
-                action
-            )
+            observation, _, terminated, truncated, info = self.env.step(action)
             if self.unwrapped.data["camera_y"] == 0:
                 break
 
@@ -392,7 +390,7 @@ class StageWrapper(gym.Wrapper):
 
         return (
             self.observation(observation),
-            self.reward(reward),
+            self.reward(action),
             self.terminated(terminated),
             self.truncated(truncated)
             if self.truncate_if_no_improvement
@@ -458,14 +456,22 @@ class StageWrapper(gym.Wrapper):
 
         return variables
 
-    def reward(self, _):
+    def reward(self, action):
         reward = self.reward_calculator.get_stage_reward(self.unwrapped.data)
 
         self.min_distance = self.reward_calculator.min_distance
+
+        if self.get_wrapper_attr("statename") == "NightmarePit.state":
+            reward = int(action[2] == 1) - int(action[1] == 2)
         return reward
 
     def terminated(self, terminated):
         data = self.unwrapped.data
+
+        if (self.get_wrapper_attr("statename") == "NightmarePit.state") and (
+            data["screen"] == 3
+        ):
+            return True
 
         # finish screen
         target_screen = self.target_screen
@@ -594,7 +600,7 @@ class StageReward:
 
         return reward - self.time_punishment_factor
 
-    def wavefront_expansion_reward(self, data):
+    def wavefront_expansion_reward(self, data, nightmare=False):
         # this didn't end well, but it might be useful in the future:
         # if self.prev_lives is not None and data["lives"] < self.prev_lives:
         #     return -5

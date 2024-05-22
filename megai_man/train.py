@@ -24,7 +24,8 @@ def train():
     time_punishment_factor = 0
     env_kwargs = {
         "n_envs": n_envs,
-        "state": "CutMan",
+        # "state": "CutMan",
+        "state": "NightmarePit",
         "screen": None,
         "frameskip": frameskip,
         "frame_stack": frame_stack,
@@ -35,28 +36,28 @@ def train():
         "invincible": False,
         "no_enemies": False,
         "render_mode": None,
-        "fixed_damage_punishment": 2,
+        "fixed_damage_punishment": 1,
         "forward_factor": 0.5,
-        "backward_factor": 1,
+        "backward_factor": 0.55,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
         "curriculum": False,
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
-    venv = VecNormalize(
-        venv,
-        training=True,
-        norm_obs=False,
-        norm_reward=True,
-        gamma=0.995,
-        clip_reward=10,
-    )
-    n_steps = 1024
+    # venv = VecNormalize(
+    #     venv,
+    #     training=True,
+    #     norm_obs=False,
+    #     norm_reward=True,
+    #     gamma=0.995,
+    #     clip_reward=10,
+    # )
+    n_steps = 512
     # batch_size = n_envs * n_steps
-    batch_size = 64
-    lr = lambda x: 4e-4 * x
-    # lr = 4e-4
+    batch_size = 128
+    # lr = lambda x: 4e-4 * x
+    lr = 1e-4
 
     model_kwargs = {
         "learning_rate": lr,
@@ -66,11 +67,11 @@ def train():
         # future_horizon = frame_skip * frame_time / (1 - gamma) =
         # 4 * (1 / 60) / (1 - 0.995) = 13.3 seconds in real game time
         # that's the future horizon that our agent is capable of planning for
-        "gamma": 0.995,
+        "gamma": 0.99,
         "gae_lambda": 0.95,
         "clip_range": 0.1,
         "normalize_advantage": True,
-        "ent_coef": 3e-3,
+        "ent_coef": 1e-2,
         # "policy_kwargs": dict(net_arch=[dict(pi=[256, 256], vf=[256, 256])])
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
@@ -80,16 +81,17 @@ def train():
 
     model_name = (
         "sevs"
+        "_NIGHTMAREPIT"
         f"_{'all' if env_kwargs['screen'] is None else env_kwargs['screen']}"
         f"_steps{n_steps}_batch{batch_size}"
-        # f"_lr{model_kwargs['learning_rate']:.1e}"
-        "_lrLin4e-4"
+        f"_lr{model_kwargs['learning_rate']:.1e}"
+        # "_lrLin4e-4"
         f"_epochs{model_kwargs['n_epochs']}"
         f"_clip{model_kwargs['clip_range']}"
         f"_ecoef{model_kwargs['ent_coef']:.0e}"
         f"_gamma{model_kwargs['gamma']}"
         # "_wide_pivf"
-        "_rewnorm2"
+        # "_rewnorm2"
         # "_featdim1024"
         "_"  # for separating env parameters
         f"_fs{frameskip}"
@@ -102,8 +104,9 @@ def train():
         "_spikefix6"
         "_scen3"
         "_actionskipB"
-        "_multinput"
+        "_multinput2"
         "_recurrent"
+        # "_NIGHTMAREREW"
         # "_RE3"
         # "_curriculum500k"
         # "_INVINCIBLE"
@@ -144,14 +147,14 @@ def train():
             "render_mode": None,
         }
     )
-    eval_venv = VecNormalize(
-        eval_venv,
-        training=False,
-        norm_obs=False,
-        norm_reward=True,
-        gamma=0.995,
-        clip_reward=10,
-    )
+    # eval_venv = VecNormalize(
+    #     eval_venv,
+    #     training=False,
+    #     norm_obs=False,
+    #     norm_reward=True,
+    #     gamma=0.995,
+    #     clip_reward=10,
+    # )
     eval_callback = EvalCallback(
         # same env, just replacing n_envs with 1
         eval_venv,

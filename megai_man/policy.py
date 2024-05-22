@@ -148,8 +148,12 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
                 isinstance(subspace, gym.spaces.Box)
                 and len(subspace.shape) == 1
             ):
-                # "MLP" for vector input ()
-                self.extractors[key] = nn.Identity()
+                # "MLP" for vector input
+                self.extractors[key] = nn.Sequential(
+                    nn.Linear(3, 3),
+                    nn.ReLU(),
+                )
+                # self.extractors[key] = nn.Identity()
                 total_output_dim += self.MLP_OUTPUT_DIM
             else:
                 raise ValueError(f"Unsupported observation space: {subspace}")

@@ -36,7 +36,8 @@ class Debugger:
                 ModelClass = RecurrentPPO
         self.env = make_venv(
             n_envs=1,
-            state="CutMan",
+            # state="CutMan",
+            state="NightmarePit",
             screen=None,
             frameskip=frameskip,
             frame_stack=self.frame_stack,
@@ -44,7 +45,7 @@ class Debugger:
             obs_space="screen",
             action_space=action_space,
             crop_img=True,
-            invincible=True,
+            invincible=False,
             no_enemies=False,
             render_mode=None,
             record=record,
@@ -79,7 +80,7 @@ class Debugger:
 
     def _setup_screen(self):
         width, height = 240, 224
-        resize_factor = 5
+        resize_factor = 2
 
         obs_space = self.env.observation_space
         if self.multi_input:
@@ -413,21 +414,10 @@ class Debugger:
 
         while not done:
             self.render_screen(image[0, -1])
-            self.display_info(
-                ", ".join(buttons),
-                action_probs,
-                vf,
-                infos[0],
-                rewards[0],
-            )
-            if self.graph:
-                self.display_plots()
             if self.multi_input:
                 self.draw_arrow(vector)
-            pygame.display.flip()
-            self.clock.tick(self.desired_fps)
 
-            if not self.handle_events():
+            if self.model is None and not self.handle_events():
                 break
 
             if self.record_grayscale_obs:
@@ -458,6 +448,22 @@ class Debugger:
                 # if not isinstance(self.model, DQN) and not self.multi_input:
                 action_probs = self._get_action_probs(obs)
                 vf = self._get_model_vf(obs)
+
+            self.display_info(
+                ", ".join(buttons),
+                action_probs,
+                vf,
+                infos[0],
+                rewards[0],
+            )
+            if self.graph:
+                self.display_plots()
+            pygame.display.flip()
+            self.clock.tick(self.desired_fps)
+
+            if self.model is not None and not self.handle_events():
+                break
+
             obs, rewards, dones, infos = self.env.step([action])
             if self.multi_input:
                 vector = obs["vector"][0]
@@ -579,12 +585,20 @@ class ActionMapper:
 
 if __name__ == "__main__":
     model = None
-    model = "checkpoints/sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE_4000000_steps"
-    # model = "models/sevs_0_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_curriculum500k.zip"
+    model = (
+        "checkpoints/"
+        "sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE"
+        "_4000000_steps"
+    )
+    model = (
+        "models/"
+        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr5.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.95__fs4_stack1_crop224common_rews_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput2_recurrent_NIGHTMAREREW"
+        ".zip"
+    )
     debugger = Debugger(
         model=model,
         deterministic=True,
-        frame_by_frame=False,
+        frame_by_frame=True,
         graph=False,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)
