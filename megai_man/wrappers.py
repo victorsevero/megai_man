@@ -216,7 +216,11 @@ class MultiInputWrapper(gym.Wrapper):
             action
         )
         observation = self.observation(observation)
-        self.last_A = action[3]
+        if isinstance(self.action_space, spaces.MultiDiscrete):
+            self.last_A = action[3]
+        else:
+            # TODO: implement A/B alternation for spaces.Discrete
+            pass
         return (
             observation,
             reward,
@@ -263,7 +267,11 @@ class MultiInputWrapper(gym.Wrapper):
             except IndexError:
                 pass
 
-        vector[2] = self.last_A
+        if isinstance(self.action_space, spaces.MultiDiscrete):
+            vector[2] = self.last_A
+        else:
+            # TODO: implement A/B alternation for spaces.Discrete
+            pass
 
         return {
             "image": obs,
@@ -317,7 +325,8 @@ class ActionSkipWrapper(gym.ActionWrapper):
             # else:
             #     self.A_frame_count = 0
         else:
-            raise NotImplementedError("A/B alternation not implemented")
+            # TODO: implement A/B alternation for spaces.Discrete
+            pass
 
         return action
 
@@ -461,17 +470,17 @@ class StageWrapper(gym.Wrapper):
 
         self.min_distance = self.reward_calculator.min_distance
 
-        if self.get_wrapper_attr("statename") == "NightmarePit.state":
-            reward = int(action[2] == 1) - int(action[1] == 2)
+        # if self.get_wrapper_attr("statename") == "NightmarePit.state":
+        #     reward = int(action[2] == 1) - int(action[1] == 2)
         return reward
 
     def terminated(self, terminated):
         data = self.unwrapped.data
 
-        if (self.get_wrapper_attr("statename") == "NightmarePit.state") and (
-            data["screen"] == 3
-        ):
-            return True
+        # if (self.get_wrapper_attr("statename") == "NightmarePit.state") and (
+        #     data["screen"] == 3
+        # ):
+        #     return True
 
         # finish screen
         target_screen = self.target_screen

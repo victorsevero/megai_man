@@ -71,7 +71,7 @@ def train():
         "gae_lambda": 0.95,
         "clip_range": 0.1,
         "normalize_advantage": True,
-        "ent_coef": 1e-2,
+        "ent_coef": 1e-3,
         # "policy_kwargs": dict(net_arch=[dict(pi=[256, 256], vf=[256, 256])])
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
