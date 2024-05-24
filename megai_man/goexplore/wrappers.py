@@ -103,7 +103,7 @@ class MegaManSpecialWrapper(SpecialWrapper):
         state=retro.State.DEFAULT,
         terminal_condition=None,
         render_mode=None,
-        record=None,
+        record=False,
     ):
         env = retro.make(
             env_id,
@@ -124,6 +124,8 @@ class MegaManSpecialWrapper(SpecialWrapper):
             fixed_damage_punishment=1,
             forward_factor=0.5,
             backward_factor=0.55,
+            truncate_if_no_improvement=False,
+            screen_rewards=True,
         )
 
         super().__init__(env, terminal_condition)
@@ -157,7 +159,11 @@ Alien = lambda: GymSpecialWrapper("Alien", TerminateOnLifeLoss(3))
 Qbert = lambda: GymSpecialWrapper("Qbert", TerminateOnLifeLoss(4))
 Pong = lambda: GymSpecialWrapper("Pong", TerminateOnNegativeReward())
 
-MegaMan = lambda: MegaManSpecialWrapper("MegaMan-v2-Nes")
+MegaMan = lambda render_mode, record: MegaManSpecialWrapper(
+    "MegaMan-v2-Nes",
+    render_mode=render_mode,
+    record=record,
+)
 
 name2env = {
     "MontezumaRevenge": MontezumaRevenge,

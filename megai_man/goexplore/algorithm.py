@@ -1,5 +1,10 @@
 from rich.console import Console
-from rich.progress import *
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TimeRemainingColumn,
+)
 from rich.traceback import install
 
 from .archive import *
@@ -148,7 +153,7 @@ class GoExplore:
         self.reward = reward
         self.length = length
         self.trajectory.set(cell.node)
-        self.env.reset()
+        self.env.reset(seed=self.seed)
 
         if self.method == "ram":
             self.env.unwrapped.em.set_state(ram)
@@ -216,7 +221,12 @@ class GoExplore:
 
         ensure_type(repeat, float, "repeat", "action repeat probability")
         ensure_range(
-            repeat, float, "repeat", "action repeat probability", 0, 1
+            repeat,
+            float,
+            "repeat",
+            "action repeat probability",
+            0,
+            1,
         )
 
         ensure_type(nsteps, int, "nsteps", "max explore duration")
@@ -577,12 +587,14 @@ class GoExplore:
             with open(os.path.join(path, "vars.json"), "r") as f:
                 meta = json.load(f)
 
-                self.cellfn = types.FunctionType(
-                    marshal.loads(meta["cellfn"]), globals(), "cellfn"
-                )
-                self.hashfn = types.FunctionType(
-                    marshal.loads(meta["hashfn"]), globals(), "hashfn"
-                )
+                # NOTE: cellfn and hashfn loading disable because I really
+                # don't know how to do this properly
+                # self.cellfn = types.FunctionType(
+                #     marshal.loads(meta["cellfn"].encode()), globals(), "cellfn"
+                # )
+                # self.hashfn = types.FunctionType(
+                #     marshal.loads(meta["hashfn"]), globals(), "hashfn"
+                # )
 
                 self.repeat = meta["repeat"]
                 self.nsteps = meta["nsteps"]
@@ -596,7 +608,8 @@ class GoExplore:
                     self.close()
                     self.env = name2env[meta["env"]]
 
-                self.env.seed(meta["seed"])
+                # NOTE: this used the old gym API, we set seed at reset now
+                # self.env.seed(meta["seed"])
                 self.seed = meta["seed"]
 
             # Update archive with file data

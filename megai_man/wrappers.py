@@ -349,6 +349,7 @@ class StageWrapper(gym.Wrapper):
         time_punishment_factor=0,
         truncate_if_no_improvement=True,
         no_enemies=False,
+        screen_rewards=False,
     ):
         super().__init__(env)
         self.reward_calculator = StageReward(
@@ -371,6 +372,8 @@ class StageWrapper(gym.Wrapper):
 
         self.no_enemies = no_enemies
 
+        self.screen_rewards = screen_rewards
+
     def reset(self, **kwargs):
         if self.no_enemies:
             self.unwrapped.em.clear_cheats()
@@ -386,6 +389,10 @@ class StageWrapper(gym.Wrapper):
         self.prev_lives = self.unwrapped.data["lives"]
         if self.damage_terminate:
             self.prev_health = self.unwrapped.data["health"]
+
+        if self.screen_rewards:
+            self.prev_screen = self.unwrapped.data["screen"]
+
         return self.observation(observation), self.info(info)
 
     def step(self, action):
@@ -470,6 +477,11 @@ class StageWrapper(gym.Wrapper):
 
         self.min_distance = self.reward_calculator.min_distance
 
+        if self.screen_rewards:
+            current_screen = self.unwrapped.data["screen"]
+            reward = current_screen - self.prev_screen
+            self.prev_screen = current_screen
+
         # if self.get_wrapper_attr("statename") == "NightmarePit.state":
         #     reward = int(action[2] == 1) - int(action[1] == 2)
         return reward
@@ -514,9 +526,10 @@ class StageWrapper(gym.Wrapper):
         )
 
     def info(self, info):
-        info["min_distance"] = self.reward_calculator.min_distance
-        info["distance"] = self.reward_calculator.prev_distance
-        info["max_screen"] = self.reward_calculator.max_screen
+        if not self.screen_rewards:
+            info["min_distance"] = self.reward_calculator.min_distance
+            info["distance"] = self.reward_calculator.prev_distance
+            info["max_screen"] = self.reward_calculator.max_screen
         info["hp"] = self.unwrapped.data["health"]
         info["x"] = self.unwrapped.data["x"]
         info["y"] = self.unwrapped.data["y"]
