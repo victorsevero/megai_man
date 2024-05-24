@@ -139,7 +139,7 @@ class GoExplore:
             RAM state
 
         """
-        return self.env.unwrapped.em.get_state()
+        return self.env.get_wrapper_attr("get_state")()
 
     def restore(self, cell):
         """Restores to a chosen cell
@@ -156,7 +156,7 @@ class GoExplore:
         self.env.reset(seed=self.seed)
 
         if self.method == "ram":
-            self.env.unwrapped.em.set_state(ram)
+            self.env.get_wrapper_attr("set_state")(ram)
         else:
             trajectory = self.trajectory.get_trajectory()
             while trajectory:

@@ -21,7 +21,7 @@ goexplore.initialize(method="ram", cellfn=cellfn)
 
 # goexplore.load("models/goxpl")
 
-while goexplore.highscore == 0:
+for _ in range(1000):
     goexplore.run(render=True)
     print(goexplore.report() + ", " + goexplore.status())
 goexplore.save("models/goxpl")

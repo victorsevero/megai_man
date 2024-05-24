@@ -539,6 +539,13 @@ class StageWrapper(gym.Wrapper):
         info["camera_screen"] = self.unwrapped.data["camera_screen"]
         return info
 
+    def get_state(self):
+        return self.env.unwrapped.em.get_state()
+
+    def set_state(self, state):
+        self.env.unwrapped.em.set_state(state)
+        self.prev_screen = self.unwrapped.data["screen"]
+
 
 class StageReward:
     SCREEN_WIDTH = 256
