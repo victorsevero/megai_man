@@ -350,6 +350,7 @@ class StageWrapper(gym.Wrapper):
         truncate_if_no_improvement=True,
         no_enemies=False,
         screen_rewards=False,
+        distance_only_on_ground=False,
     ):
         super().__init__(env)
         self.reward_calculator = StageReward(
@@ -359,6 +360,7 @@ class StageWrapper(gym.Wrapper):
             forward_factor,
             backward_factor,
             time_punishment_factor / frameskip,
+            distance_only_on_ground,
         )
         self.target_screen = screen
         self.damage_terminate = damage_terminate
@@ -396,7 +398,7 @@ class StageWrapper(gym.Wrapper):
         return self.observation(observation), self.info(info)
 
     def step(self, action):
-        while True:
+        for _ in range(60 * 10):
             observation, _, terminated, truncated, info = self.env.step(action)
             if self.unwrapped.data["camera_y"] == 0:
                 break
@@ -473,14 +475,15 @@ class StageWrapper(gym.Wrapper):
         return variables
 
     def reward(self, action):
-        reward = self.reward_calculator.get_stage_reward(self.unwrapped.data)
-
-        self.min_distance = self.reward_calculator.min_distance
-
         if self.screen_rewards:
             current_screen = self.unwrapped.data["screen"]
             reward = current_screen - self.prev_screen
             self.prev_screen = current_screen
+        else:
+            reward = self.reward_calculator.get_stage_reward(
+                self.unwrapped.data
+            )
+            self.min_distance = self.reward_calculator.min_distance
 
         # if self.get_wrapper_attr("statename") == "NightmarePit.state":
         #     reward = int(action[2] == 1) - int(action[1] == 2)
@@ -589,6 +592,7 @@ class StageReward:
         forward_factor=1,
         backward_factor=1,
         time_punishment_factor=0,
+        only_on_ground=False,
     ):
         self.damage_factor = damage_factor
         self.fixed_damage_punishment = fixed_damage_punishment
@@ -600,6 +604,7 @@ class StageReward:
         assert not fixed_damage_punishment or (
             damage_factor == 1
         ), "Not possible to set `damage_factor` if `fixed_damage_punishment` != 0"
+        self.only_on_ground = only_on_ground
 
     def reset(self):
         self.prev_distance = -1  # we don't know distance at start
@@ -629,7 +634,7 @@ class StageReward:
 
         return reward - self.time_punishment_factor
 
-    def wavefront_expansion_reward(self, data, nightmare=False):
+    def wavefront_expansion_reward(self, data):
         # this didn't end well, but it might be useful in the future:
         # if self.prev_lives is not None and data["lives"] < self.prev_lives:
         #     return -5
@@ -660,6 +665,10 @@ class StageReward:
             # + data["y"]
         ) // self.TILE_SIZE
 
+        if self.only_on_ground and data["touching_obj_top"] == 0:
+            self.frames_since_last_improvement += 1
+            return 0
+
         try:
             distance = self.distance_map[self.y, self.x]
         except IndexError:
@@ -689,7 +698,7 @@ class StageReward:
             # high pits were discouraging the agent to try jumping over them,
             # so we only penalize the agent for 9 backward tiles at max
             # return self.backward_factor * max(distance_diff, -9)
-            # POST MORTEM: this ended in infinite positive loops as expected :)
+            # NOTE: this ended in infinite positive loops as expected :)
             return self.backward_factor * distance_diff
 
     def boss_reward(self, data):

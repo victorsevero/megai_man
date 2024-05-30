@@ -4,7 +4,6 @@ from time import time
 import numpy as np
 import torch as th
 from PIL import Image
-from rllte.xplore.reward import RE3
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.utils import safe_mean
@@ -78,19 +77,20 @@ class CurriculumCallback(BaseCallback):
         return True
 
 
-class RE3Callback(BaseCallback):
-    def __init__(self, verbose=0):
+class CuriosityCallback(BaseCallback):
+    def __init__(self, RewClass, verbose=0):
         super().__init__(verbose)
         self.buffer = None
         self.device = "cuda"
+        self.RewClass = RewClass
 
     def init_callback(self, model):
-        super().init_callback(model)
         assert isinstance(
-            self.model, OnPolicyAlgorithm
+            model, OnPolicyAlgorithm
         ), "support for off-policy algorithms will be added soon!!!"
-        self.buffer = self.model.rollout_buffer
-        self.irs = RE3(self.training_env, device=self.device)
+        self.buffer = model.rollout_buffer
+        self.irs = self.RewClass(model.env, device=self.device)
+        super().init_callback(model)
 
     def _on_step(self) -> bool:
         observations = self.locals["obs_tensor"]
@@ -103,7 +103,12 @@ class RE3Callback(BaseCallback):
         )
 
         self.irs.watch(
-            observations, actions, rewards, dones, dones, next_observations
+            observations,
+            actions,
+            rewards,
+            dones,
+            dones,
+            next_observations,
         )
         return True
 
@@ -148,9 +153,10 @@ class TrainingStatsLoggerCallback(BaseCallback):
         values = np.hstack(values)
         self.logger.record("dists/values", th.from_numpy(values))
 
-        advs = rollout_buffer.advantages
-        advs = np.hstack(advs)
-        self.logger.record("dists/advantages", th.from_numpy(advs))
+        # this was never really useful for me
+        # advs = rollout_buffer.advantages
+        # advs = np.hstack(advs)
+        # self.logger.record("dists/advantages", th.from_numpy(advs))
 
 
 class StopTrainingOnTimeBudget(BaseCallback):

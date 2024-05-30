@@ -24,7 +24,7 @@ class Debugger:
         self.small_font = pygame.font.SysFont("opensans", 12)
         frameskip = 4
         self.frame_stack = 1
-        self.multi_input = True
+        self.multi_input = False
         if model is not None and "/dqn_" in model:
             action_space = "discrete"
             ModelClass = DQN
@@ -44,16 +44,17 @@ class Debugger:
             truncate_if_no_improvement=True,
             obs_space="screen",
             action_space=action_space,
-            crop_img=True,
+            crop_img=False,
             invincible=False,
             no_enemies=False,
             render_mode=None,
             record=record,
             damage_terminate=False,
-            fixed_damage_punishment=1,
-            forward_factor=0.25,
-            backward_factor=0.3,
+            fixed_damage_punishment=0.001,
+            forward_factor=0.5,
+            backward_factor=0.55,
             multi_input=self.multi_input,
+            distance_only_on_ground=True,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
@@ -80,7 +81,7 @@ class Debugger:
 
     def _setup_screen(self):
         width, height = 240, 224
-        resize_factor = 2
+        resize_factor = 5
 
         obs_space = self.env.observation_space
         if self.multi_input:
@@ -587,19 +588,19 @@ if __name__ == "__main__":
     model = None
     model = (
         "checkpoints/"
-        "sevs_all_steps512_batch4096_lr2.5e-04_epochs4_clip0.2_ecoef1e-02_gamma0.99__fs4_stack1_crop224_small_rewards2_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput_recurrent_INVINCIBLE"
-        "_4000000_steps"
+        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-05_epochs4_clip0.1_ecoef1e-03_gamma0.99__fs4_stack1common_rews_dmg0.001_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+        "_1000000_steps"
     )
     model = (
         "models/"
-        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr5.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.95__fs4_stack1_crop224common_rews_time_punishment0_trunc60snoprog_spikefix6_scen3_actionskipB_multinput2_recurrent_NIGHTMAREREW"
+        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.99__fs4_stack1_hw168common_rews_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
         ".zip"
     )
     debugger = Debugger(
         model=model,
         deterministic=True,
         frame_by_frame=True,
-        graph=False,
+        graph=True,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)

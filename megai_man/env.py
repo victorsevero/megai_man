@@ -67,9 +67,13 @@ def make_venv(
         venv = VecTransposeImage(venv)
         if multi_input:
             venv = VecRemoveVectorStacks(venv)
+    if stage_wrapper_kwargs.get("screen_rewards", False):
+        info_keywords = ()
+    else:
+        info_keywords = ("distance", "min_distance", "max_screen", "hp")
     venv = VecMonitor(
         venv,
-        info_keywords=("distance", "min_distance", "max_screen", "hp"),
+        info_keywords=info_keywords,
     )
     return venv
 
