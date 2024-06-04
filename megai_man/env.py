@@ -134,6 +134,7 @@ def make_env(
     )
     if obs_space == "screen":
         env = WarpFrame(env, crop=crop_img)
+        # env = WarpFrame(env, width=168, height=168, crop=crop_img)
 
     if multi_input:
         env = MultiInputWrapper(env)

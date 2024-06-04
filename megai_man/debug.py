@@ -36,8 +36,8 @@ class Debugger:
                 ModelClass = RecurrentPPO
         self.env = make_venv(
             n_envs=1,
-            # state="CutMan",
-            state="NightmarePit",
+            state="CutMan",
+            # state="NightmarePit",
             screen=None,
             frameskip=frameskip,
             frame_stack=self.frame_stack,
@@ -55,6 +55,7 @@ class Debugger:
             backward_factor=0.55,
             multi_input=self.multi_input,
             distance_only_on_ground=True,
+            term_back_screen=True,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
@@ -585,21 +586,20 @@ class ActionMapper:
 
 
 if __name__ == "__main__":
-    model = None
     model = (
         "checkpoints/"
-        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-05_epochs4_clip0.1_ecoef1e-03_gamma0.99__fs4_stack1common_rews_dmg0.001_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1common_rews+screen10_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
         "_1000000_steps"
     )
-    model = (
-        "models/"
-        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.99__fs4_stack1_hw168common_rews_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
-        ".zip"
-    )
+    # model = (
+    #     "models/"
+    #     "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.99__fs4_stack1_hw168common_rews_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+    #     ".zip"
+    # )
     debugger = Debugger(
-        model=model,
+        # model=model,
         deterministic=True,
-        frame_by_frame=True,
+        # frame_by_frame=True,
         graph=True,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)

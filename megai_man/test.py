@@ -32,7 +32,7 @@ def evaluate_policy_details(model: RecurrentPPO, env, deterministic=True):
 def test():
     venv = make_venv(
         n_envs=1,
-        state="NightmarePit",
+        state="CutMan",
         screen=None,
         frameskip=4,
         frame_stack=1,
@@ -42,18 +42,19 @@ def test():
         crop_img=False,
         invincible=False,
         render_mode="human",
-        # record="non_determ",
+        record=".",
         damage_terminate=False,
         fixed_damage_punishment=1,
         forward_factor=0.5,
         backward_factor=0.55,
         multi_input=False,
         distance_only_on_ground=True,
+        term_back_screen=True,
     )
     model_name = (
         "checkpoints/"
-        "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-01_gamma0.99__fs4_stack1common_rews_dmg0.5_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
-        "_4000000_steps"
+        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1rews0.05+screen1_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+        "_17000000_steps"
     )
     # model_name = (
     #     "models/"
@@ -62,7 +63,7 @@ def test():
     # )
     # model_name = (
     #     "models/"
-    #     "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.99__fs4_stack1_hw168common_rews_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1common_rews_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
     #     ".zip"
     # )
     model = RecurrentPPO.load(model_name, env=venv)

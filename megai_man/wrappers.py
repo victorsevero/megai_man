@@ -351,6 +351,7 @@ class StageWrapper(gym.Wrapper):
         no_enemies=False,
         screen_rewards=False,
         distance_only_on_ground=False,
+        term_back_screen=False,
     ):
         super().__init__(env)
         self.reward_calculator = StageReward(
@@ -375,6 +376,7 @@ class StageWrapper(gym.Wrapper):
         self.no_enemies = no_enemies
 
         self.screen_rewards = screen_rewards
+        self.term_back_screen = term_back_screen
 
     def reset(self, **kwargs):
         if self.no_enemies:
@@ -485,6 +487,9 @@ class StageWrapper(gym.Wrapper):
             )
             self.min_distance = self.reward_calculator.min_distance
 
+        if self.reward_calculator.new_screen:
+            reward += 1
+
         # if self.get_wrapper_attr("statename") == "NightmarePit.state":
         #     reward = int(action[2] == 1) - int(action[1] == 2)
         return reward
@@ -517,6 +522,20 @@ class StageWrapper(gym.Wrapper):
         if (
             data["touching_obj_top"] == SPIKE_VALUE
             or data["touching_obj_side"] == SPIKE_VALUE
+        ):
+            return True
+
+        if (
+            self.term_back_screen
+            # backed a whole screen
+            and data["screen"] < self.reward_calculator.max_screen
+            # current screen is below max screen
+            and self.reward_calculator.SCREENS_OFFSETS_CUTMAN[data["screen"]][
+                "y"
+            ]
+            > self.reward_calculator.SCREENS_OFFSETS_CUTMAN[
+                self.reward_calculator.max_screen
+            ]["y"]
         ):
             return True
 
@@ -615,6 +634,7 @@ class StageReward:
         self.min_distance = self.distance_map.max()
         self.max_screen = 0
         self.frames_since_last_improvement = 0
+        self.new_screen = False
 
     def get_stage_reward(self, data):
         if self._is_in_boss_room(data):
@@ -651,7 +671,10 @@ class StageReward:
 
         screen = data["screen"]
         if screen > self.max_screen:
+            self.new_screen = True
             self.max_screen = screen
+        else:
+            self.new_screen = False
 
         screen_offset = self.screen_offset_map[screen]
 

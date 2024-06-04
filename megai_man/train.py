@@ -37,14 +37,15 @@ def train():
         "invincible": False,
         "no_enemies": False,
         "render_mode": None,
-        "fixed_damage_punishment": 0.5,
-        "forward_factor": 0.5,
-        "backward_factor": 0.55,
+        "fixed_damage_punishment": 0.05,
+        "forward_factor": 0.050,
+        "backward_factor": 0.055,
         "time_punishment_factor": time_punishment_factor,
         "multi_input": multi_input,
         "curriculum": False,
-        "screen_rewards": True,
+        "screen_rewards": False,
         "distance_only_on_ground": True,
+        "term_back_screen": True,
         "_enforce_subproc": True,
     }
     venv = make_venv(**env_kwargs)
@@ -60,7 +61,7 @@ def train():
     # batch_size = n_envs * n_steps
     batch_size = 128
     model_kwargs = {
-        "learning_rate": 1e-4,
+        "learning_rate": 2.5e-4,
         "n_steps": n_steps,
         "batch_size": batch_size,
         "n_epochs": 4,
@@ -99,11 +100,12 @@ def train():
         f"_stack{frame_stack}"
         # "_crop224"
         # "_hw168"
-        "common_rews"
+        "rews0.05+screen1"
         "_dmg0.5"
         f"_time_punishment{time_punishment_factor}"
         "_groundonly"
         # "_trunc6min"
+        "_termbackscreen2"
         "_trunc60snoprog"
         "_spikefix6"
         "_scen3"
@@ -138,7 +140,7 @@ def train():
             device="cuda",
             **model_kwargs,
         )
-    total_timesteps = 10_000_000
+    total_timesteps = 5_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",
