@@ -11,7 +11,7 @@ SPIKE_VALUE = 3
 
 
 class VecRemoveVectorStacks(VecEnvWrapper):
-    VECTOR_SIZE = 3
+    VECTOR_SIZE = 4
 
     def __init__(self, venv: VecEnv):
         super().__init__(venv)
@@ -198,12 +198,14 @@ class MultiInputWrapper(gym.Wrapper):
                 "vector": gym.spaces.Box(
                     low=-1,
                     high=1,
-                    shape=(3,),
+                    shape=(4,),
                     dtype=np.int16,
                 ),
             }
         )
         self.last_A = 0
+        self.calculator = self.env.get_wrapper_attr("reward_calculator")
+        self.max_distance = self.calculator.distance_map.max()
 
     def reset(self, **kwargs):
         self.last_A = 0
@@ -230,21 +232,24 @@ class MultiInputWrapper(gym.Wrapper):
         )
 
     def observation(self, obs):
-        calculator = self.env.get_wrapper_attr("reward_calculator")
-        vector = [0, 0, 0]
-        if hasattr(calculator, "x"):
+        vector = [0, 0, 0, 0]
+        if hasattr(self.calculator, "x"):
             try:
                 if (
-                    calculator.distance_map[calculator.y, calculator.x + 1]
-                    == calculator.prev_distance - 1
+                    self.calculator.distance_map[
+                        self.calculator.y, self.calculator.x + 1
+                    ]
+                    == self.calculator.prev_distance - 1
                 ):
                     vector[0] = 1
             except IndexError:
                 pass
             try:
                 if (
-                    calculator.distance_map[calculator.y, calculator.x - 1]
-                    == calculator.prev_distance - 1
+                    self.calculator.distance_map[
+                        self.calculator.y, self.calculator.x - 1
+                    ]
+                    == self.calculator.prev_distance - 1
                 ):
                     vector[0] = -1
             except IndexError:
@@ -252,16 +257,20 @@ class MultiInputWrapper(gym.Wrapper):
 
             try:
                 if (
-                    calculator.distance_map[calculator.y - 1, calculator.x]
-                    == calculator.prev_distance - 1
+                    self.calculator.distance_map[
+                        self.calculator.y - 1, self.calculator.x
+                    ]
+                    == self.calculator.prev_distance - 1
                 ):
                     vector[1] = 1
             except IndexError:
                 pass
             try:
                 if (
-                    calculator.distance_map[calculator.y + 1, calculator.x]
-                    == calculator.prev_distance - 1
+                    self.calculator.distance_map[
+                        self.calculator.y + 1, self.calculator.x
+                    ]
+                    == self.calculator.prev_distance - 1
                 ):
                     vector[1] = -1
             except IndexError:
@@ -272,6 +281,10 @@ class MultiInputWrapper(gym.Wrapper):
         else:
             # TODO: implement A/B alternation for spaces.Discrete
             pass
+
+        # farthest point achieved to avoid breaking Markov Property
+        # since some rewards are given based on reaching new screens
+        vector[3] = 1 - self.calculator.min_distance / self.max_distance
 
         return {
             "image": obs,

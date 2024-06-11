@@ -163,7 +163,7 @@ cython_debug/
 .vscode/
 
 # ROMs
-rom.nes
+*.nes
 rom.sfc
 /*.asm
 

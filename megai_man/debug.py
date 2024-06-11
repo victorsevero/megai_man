@@ -600,7 +600,7 @@ if __name__ == "__main__":
         # model=model,
         deterministic=True,
         # frame_by_frame=True,
-        graph=True,
+        # graph=True,
     )
     # debugger = Debugger(model=model, frame_by_frame=True)
     # debugger = Debugger(frame_by_frame=True)
