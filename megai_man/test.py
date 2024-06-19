@@ -45,21 +45,21 @@ def test():
         record=".",
         damage_terminate=False,
         fixed_damage_punishment=1,
-        forward_factor=0.5,
-        backward_factor=0.55,
+        forward_factor=0.05,
+        backward_factor=0.055,
         multi_input=False,
         distance_only_on_ground=True,
         term_back_screen=True,
     )
     model_name = (
         "checkpoints/"
-        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
-        "_1000000_steps"
+        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
+        "_16000000_steps"
     )
     # model_name = (
     #     "models/"
     #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1rews0.05+screen1_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
-    #     "/best_model.zip"
+    #     "_best/best_model"
     # )
     # model_name = (
     #     "models/"

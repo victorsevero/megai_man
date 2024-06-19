@@ -4,12 +4,13 @@ from copy import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from sb3_contrib import RecurrentPPO
 from stable_baselines3 import PPO
 from torch import nn
 from torchvision import utils
 from tqdm import trange
 
-FRAMESTACK_NUMBER = 3
+FRAMESTACK_NUMBER = 1
 
 torch.autograd.set_grad_enabled(True)
 
@@ -119,8 +120,8 @@ def iterate(model, filter_index, input_data):
 
 
 def deprocess_image(x):
-    x -= x.mean()
-    x /= x.std() + 1e-5
+    x -= x.mean(dim=(1, 2), keepdim=True)
+    x /= x.std(dim=(1, 2), keepdim=True) + 1e-5
     x *= 0.1
     x += 0.5
     x *= 255
@@ -129,10 +130,16 @@ def deprocess_image(x):
 
 
 if __name__ == "__main__":
-    model_name = "envfix4_crop_nsteps1024_ec0.05"
-    model = PPO.load(f"models/{model_name}")
+    model_name = (
+        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
+        "_best/best_model"
+    )
+    model = RecurrentPPO.load(f"models/{model_name}")
 
-    cnn = model.policy.features_extractor.cnn
+    try:
+        cnn = model.policy.features_extractor.cnn
+    except AttributeError:
+        cnn = model.policy.features_extractor.extractors.image.cnn
 
     for layer_idx, layer in enumerate(cnn):
         if isinstance(layer, nn.ReLU):
@@ -143,5 +150,5 @@ if __name__ == "__main__":
                 model=model,
                 out_size=model[conv2d_idx].out_channels,
                 layer_idx=conv2d_idx,
-                # channel=channel,
+                channel=0,
             )

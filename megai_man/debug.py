@@ -1,10 +1,13 @@
 import cv2
+import matplotlib.cm as cm
 import numpy as np
 import pygame
 import torch
 from env import make_venv
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import DQN, PPO
+from stable_baselines3.common.preprocessing import preprocess_obs
+from torch import nn
 
 
 class Debugger:
@@ -16,6 +19,7 @@ class Debugger:
         record_grayscale_obs=False,
         frame_by_frame=False,
         deterministic=True,
+        grad_cam=False,
     ):
         pygame.init()
         pygame.font.init()
@@ -50,9 +54,9 @@ class Debugger:
             render_mode=None,
             record=record,
             damage_terminate=False,
-            fixed_damage_punishment=0.001,
-            forward_factor=0.5,
-            backward_factor=0.55,
+            fixed_damage_punishment=0.12,
+            forward_factor=0.05,
+            backward_factor=0.055,
             multi_input=self.multi_input,
             distance_only_on_ground=True,
             term_back_screen=True,
@@ -79,6 +83,7 @@ class Debugger:
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
         self.graph_color = (255, 255, 255)
+        self.grad_cam = grad_cam
 
     def _setup_screen(self):
         width, height = 240, 224
@@ -105,9 +110,22 @@ class Debugger:
         self.resize_factor = resize_factor
 
     def render_screen(self, obs):
-        surface = pygame.surfarray.make_surface(
-            np.stack((obs.T,) * 3, axis=-1)
-        )
+        if self.grad_cam:
+            env_screen = np.uint8(0.4 * np.stack((obs.T,) * 4, axis=-1))
+            heatmap = cv2.resize(
+                self.heatmap,
+                obs.shape,
+            )
+            env_screen = np.clip(
+                env_screen.astype(np.uint16) + heatmap,
+                a_min=0,
+                a_max=255,
+            ).astype(np.uint8)
+            env_screen = env_screen[:, :, :-1]
+        else:
+            env_screen = np.stack((obs.T,) * 3, axis=-1)
+
+        surface = pygame.surfarray.make_surface(env_screen)
         surface = pygame.transform.scale_by(surface, self.resize_factor)
         self.screen.blit(surface, (0, 0))
 
@@ -415,7 +433,6 @@ class Debugger:
         self.step = 0
 
         while not done:
-            self.render_screen(image[0, -1])
             if self.multi_input:
                 self.draw_arrow(vector)
 
@@ -451,6 +468,10 @@ class Debugger:
                 action_probs = self._get_action_probs(obs)
                 vf = self._get_model_vf(obs)
 
+                if self.grad_cam:
+                    self._grad_cam(obs)
+
+            self.render_screen(image[0, -1])
             self.display_info(
                 ", ".join(buttons),
                 action_probs,
@@ -548,6 +569,52 @@ class Debugger:
         value_function = value_function.detach().cpu().numpy()
         return f"{value_function:.2f}"
 
+    def _grad_cam(self, obs):
+        self.model.policy.train()
+
+        cnn = self.model.policy.pi_features_extractor.cnn[:5]
+        classifier = nn.Sequential(
+            self.model.policy.pi_features_extractor.cnn[5:],
+            self.model.policy.pi_features_extractor.linear,
+            self.model.policy.lstm_actor,
+            TensorExtractor(),
+            self.model.policy.action_net,
+        )
+        input_tensor = preprocess_obs(
+            torch.from_numpy(obs).cuda(),
+            self.model.observation_space,
+            normalize_images=self.model.policy.normalize_images,
+        )
+        input_tensor.requires_grad = True
+
+        cnn_output = cnn(input_tensor)
+        preds = classifier(cnn_output)
+        top_pred_index = torch.argmax(preds[0])
+        top_class_channel = preds[:, top_pred_index]
+
+        self.model.policy.zero_grad()
+        top_class_channel.backward(retain_graph=True)
+        # top_class_channel.backward()
+        grads = input_tensor.grad
+        pooled_grads = torch.mean(grads, dim=[2, 3]).cpu().numpy()
+        # NOTE: won't work for 2+ channels or batch size > 1
+
+        self.model.policy.eval()
+
+        cnn_output = cnn_output.detach().cpu().numpy()[0]
+        cnn_output *= pooled_grads
+
+        heatmap = np.mean(cnn_output, axis=0)
+        heatmap = np.maximum(heatmap, 0)
+        heatmap /= np.max(heatmap)
+        heatmap = np.uint8(255 * heatmap)
+
+        jet = cm.get_cmap("jet")
+        jet_colors = jet(np.arange(256))[:, :4]
+        jet_heatmap = jet_colors[heatmap]
+        jet_heatmap *= 0.4
+        self.heatmap = np.uint8(255 * jet_heatmap)
+
 
 class ActionMapper:
     def __init__(self, env, action_space="multi_discrete"):
@@ -585,24 +652,33 @@ class ActionMapper:
         return self.actions[tuple(sorted(buttons))]
 
 
+class TensorExtractor(nn.Module):
+    def forward(self, x):
+        tensor, *_ = x
+        return tensor
+
+
 if __name__ == "__main__":
-    model = (
-        "checkpoints/"
-        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1common_rews+screen10_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
-        "_1000000_steps"
-    )
+    # model = (
+    #     "checkpoints/"
+    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1_rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_multinput5_recurrent_editROM3"
+    #     "_10000000_steps"
+    # )
     # model = (
     #     "models/"
-    #     "sevs_NIGHTMAREPIT_all_steps512_batch128_lr1.0e-04_epochs4_clip0.1_ecoef1e-02_gamma0.99__fs4_stack1_hw168common_rews_time_punishment0_groundonly_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.01_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_multinput5_recurrent_editROM2"
     #     ".zip"
     # )
-    debugger = Debugger(
-        # model=model,
-        deterministic=True,
-        # frame_by_frame=True,
-        # graph=True,
+    model = (
+        "models/"
+        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
+        "_best/best_model"
     )
-    # debugger = Debugger(model=model, frame_by_frame=True)
-    # debugger = Debugger(frame_by_frame=True)
-    # debugger = Debugger()
+    debugger = Debugger(
+        model=model,
+        deterministic=True,
+        frame_by_frame=True,
+        # graph=True,
+        grad_cam=True,
+    )
     debugger.run()

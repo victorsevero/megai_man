@@ -123,7 +123,7 @@ class WideNatureCNN(BaseFeaturesExtractor):
 
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
-    MLP_OUTPUT_DIM = 4
+    MLP_OUTPUT_DIM = 2
 
     def __init__(self, observation_space: gym.spaces.Dict, cnn_output_dim=512):
         super(CustomCombinedExtractor, self).__init__(
@@ -150,10 +150,11 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             ):
                 # "MLP" for vector input
                 # self.extractors[key] = nn.Sequential(
-                #     nn.Linear(3, 3),
+                #     nn.Linear(self.MLP_OUTPUT_DIM, self.MLP_OUTPUT_DIM),
                 #     nn.ReLU(),
                 # )
-                self.extractors[key] = nn.Identity()
+                # self.extractors[key] = nn.Identity()
+                self.extractors[key] = nn.Flatten()
                 total_output_dim += self.MLP_OUTPUT_DIM
             else:
                 raise ValueError(f"Unsupported observation space: {subspace}")

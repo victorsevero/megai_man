@@ -22,7 +22,7 @@ from megai_man.policy import CustomMultiInputLstmPolicy, CustomMultiInputPolicy
 
 def train():
     AlgoClass = RecurrentPPO
-    multi_input = False
+    multi_input = True
     n_envs = 8
     frameskip = 4
     frame_stack = 1
@@ -41,7 +41,7 @@ def train():
         "invincible": False,
         "no_enemies": False,
         "render_mode": None,
-        "fixed_damage_punishment": 0.12,
+        "fixed_damage_punishment": 0.06,
         "forward_factor": 0.05,
         "backward_factor": 0.055,
         "time_punishment_factor": time_punishment_factor,
@@ -78,6 +78,10 @@ def train():
         "normalize_advantage": True,
         "ent_coef": 1e-3,
         "vf_coef": 1,
+        "policy_kwargs": {
+            "share_features_extractor": False,
+            # "lstm_hidden_size": 128,
+        }
         # "policy_kwargs": dict(net_arch=[dict(pi=[256, 256], vf=[256, 256])])
         # "policy_kwargs": {
         # "features_extractor_class": WideNatureCNN,
@@ -86,7 +90,7 @@ def train():
     }
 
     model_name = (
-        "sevs"
+        f"sevs{n_envs if n_envs != 8 else ''}"
         # "_NIGHTMAREPIT"
         f"_{'all' if env_kwargs['screen'] is None else env_kwargs['screen']}"
         f"_steps{n_steps}_batch{batch_size}"
@@ -97,6 +101,7 @@ def train():
         f"_ecoef{model_kwargs['ent_coef']:.0e}"
         f"_gamma{model_kwargs['gamma']}"
         f"_vf{model_kwargs['vf_coef']}"
+        "_twoFEs"
         # "_RND"
         # "_wide_pivf"
         # "_rewnorm2"
@@ -104,27 +109,31 @@ def train():
         "_"  # for separating env parameters
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
+        # "_lstm128"
         # "_crop224"
-        # "_hw168"
-        # "_interNear"
-        "rews0.05+screen1"
+        "_hw224"
+        "_Near"
+        "_rews0.05+screen1"
         f"_dmg{env_kwargs['fixed_damage_punishment']}"
-        f"_time_punishment{time_punishment_factor}"
+        # f"_time_punish{time_punishment_factor}"
         "_groundonly"
         # "_trunc6min"
         "_termbackscreen2"
         # "_trunc60snoprog"
+        # fmt: off
         "_spikefix6"
         "_scen3"
-        "_actionskipB"
-        "_multinput3"
-        "_recurrent"
+        "_skipB"
+        # fmt: on
+        "_multinput5"
+        # "_recurrent"
         # "_contmap"
         # "_NIGHTMAREREW"
         # "_RE3"
         # "_curriculum500k"
         # "_INVINCIBLE"
         # "_NO_ENEMIES"
+        "_editROM3"
     )
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
@@ -140,6 +149,7 @@ def train():
             policy="CnnLstmPolicy"
             if not multi_input
             else CustomMultiInputLstmPolicy,
+            # else "MultiInputLstmPolicy",
             env=venv,
             tensorboard_log=tensorboard_log,
             verbose=0,

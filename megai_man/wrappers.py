@@ -11,7 +11,7 @@ SPIKE_VALUE = 3
 
 
 class VecRemoveVectorStacks(VecEnvWrapper):
-    VECTOR_SIZE = 4
+    VECTOR_SIZE = 2
 
     def __init__(self, venv: VecEnv):
         super().__init__(venv)
@@ -159,6 +159,7 @@ class WarpFrame(gym.Wrapper):
             obs,
             (self.width, self.height),
             interpolation=cv2.INTER_AREA,
+            # interpolation=cv2.INTER_NEAREST,
         )
 
         return obs[:, :, np.newaxis]
@@ -193,13 +194,14 @@ class MultiInputWrapper(gym.Wrapper):
                     low=0,
                     high=255,
                     shape=(84, 84, 1),
+                    # shape=(224, 240, 1),
                     dtype=np.uint8,
                 ),
                 "vector": gym.spaces.Box(
-                    low=-1,
+                    low=0,
                     high=1,
-                    shape=(4,),
-                    dtype=np.int16,
+                    shape=(2,),
+                    dtype=np.float32,
                 ),
             }
         )
@@ -232,63 +234,66 @@ class MultiInputWrapper(gym.Wrapper):
         )
 
     def observation(self, obs):
-        vector = [0, 0, 0, 0]
-        if hasattr(self.calculator, "x"):
-            try:
-                if (
-                    self.calculator.distance_map[
-                        self.calculator.y, self.calculator.x + 1
-                    ]
-                    == self.calculator.prev_distance - 1
-                ):
-                    vector[0] = 1
-            except IndexError:
-                pass
-            try:
-                if (
-                    self.calculator.distance_map[
-                        self.calculator.y, self.calculator.x - 1
-                    ]
-                    == self.calculator.prev_distance - 1
-                ):
-                    vector[0] = -1
-            except IndexError:
-                pass
+        vector = [0, 0]
+        # if hasattr(self.calculator, "x"):
+        #     try:
+        #         if (
+        #             self.calculator.distance_map[
+        #                 self.calculator.y, self.calculator.x + 1
+        #             ]
+        #             == self.calculator.prev_distance - 1
+        #         ):
+        #             vector[0] = 1
+        #     except IndexError:
+        #         pass
+        #     try:
+        #         if (
+        #             self.calculator.distance_map[
+        #                 self.calculator.y, self.calculator.x - 1
+        #             ]
+        #             == self.calculator.prev_distance - 1
+        #         ):
+        #             vector[0] = -1
+        #     except IndexError:
+        #         pass
 
-            try:
-                if (
-                    self.calculator.distance_map[
-                        self.calculator.y - 1, self.calculator.x
-                    ]
-                    == self.calculator.prev_distance - 1
-                ):
-                    vector[1] = 1
-            except IndexError:
-                pass
-            try:
-                if (
-                    self.calculator.distance_map[
-                        self.calculator.y + 1, self.calculator.x
-                    ]
-                    == self.calculator.prev_distance - 1
-                ):
-                    vector[1] = -1
-            except IndexError:
-                pass
+        #     try:
+        #         if (
+        #             self.calculator.distance_map[
+        #                 self.calculator.y - 1, self.calculator.x
+        #             ]
+        #             == self.calculator.prev_distance - 1
+        #         ):
+        #             vector[1] = 1
+        #     except IndexError:
+        #         pass
+        #     try:
+        #         if (
+        #             self.calculator.distance_map[
+        #                 self.calculator.y + 1, self.calculator.x
+        #             ]
+        #             == self.calculator.prev_distance - 1
+        #         ):
+        #             vector[1] = -1
+        #     except IndexError:
+        #         pass
 
-        if isinstance(self.action_space, spaces.MultiDiscrete):
-            vector[2] = self.last_A
-        else:
-            # TODO: implement A/B alternation for spaces.Discrete
-            pass
+        # if isinstance(self.action_space, spaces.MultiDiscrete):
+        #     vector[2] = self.last_A
+        # else:
+        #     # TODO: implement A/B alternation for spaces.Discrete
+        #     pass
 
         # farthest point achieved to avoid breaking Markov Property
         # since some rewards are given based on reaching new screens
-        vector[3] = 1 - self.calculator.min_distance / self.max_distance
+        vector[0] = 1 - self.calculator.min_distance / self.max_distance
+
+        # set vector[4] to HP and normalize it
+        vector[1] = self.env.unwrapped.data["health"] / 28
 
         return {
             "image": obs,
-            "vector": np.array(vector, dtype=np.int16),
+            "vector": np.array(vector, dtype=np.float32),
         }
 
 
