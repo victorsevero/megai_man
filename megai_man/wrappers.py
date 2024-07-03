@@ -3,15 +3,18 @@ from pathlib import Path
 import cv2
 import gymnasium as gym
 import numpy as np
+import yaml
 from gymnasium import spaces
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv, VecEnvWrapper
+
+from megai_man.utils import ActionMapper
 
 # https://datacrystal.romhacking.net/wiki/Mega_Man_(NES)/RAM_map
 SPIKE_VALUE = 3
 
 
 class VecRemoveVectorStacks(VecEnvWrapper):
-    VECTOR_SIZE = 2
+    VECTOR_SIZE = 3
 
     def __init__(self, venv: VecEnv):
         super().__init__(venv)
@@ -47,15 +50,27 @@ class FrameskipWrapper(gym.Wrapper):
     def __init__(self, env: gym.Env, skip: int = 4):
         super().__init__(env)
         self._skip = skip
+        with open("megai_man/hit_visibility_frames.yaml") as f:
+            self.visibility_dict = yaml.safe_load(f)
 
     def step(self, action):
         total_reward = 0.0
-        for _ in range(self._skip):
+        visible = False
+        i = 0
+        while i < 4 or not visible:
             obs, reward, terminated, truncated, info = self.env.step(action)
             done = terminated or truncated
             total_reward += float(reward)
             if done:
                 break
+            if i == 4:
+                visibility = self.visibility_dict[
+                    self.unwrapped.data["blink_counter"]
+                ]
+                if visibility in ("v", "w"):
+                    visible = True
+            else:
+                i += 1
 
         return obs, total_reward, terminated, truncated, info
 
@@ -200,7 +215,7 @@ class MultiInputWrapper(gym.Wrapper):
                 "vector": gym.spaces.Box(
                     low=0,
                     high=1,
-                    shape=(2,),
+                    shape=(3,),
                     dtype=np.float32,
                 ),
             }
@@ -221,10 +236,9 @@ class MultiInputWrapper(gym.Wrapper):
         )
         observation = self.observation(observation)
         if isinstance(self.action_space, spaces.MultiDiscrete):
-            self.last_A = action[3]
+            self.last_A = action[2]
         else:
-            # TODO: implement A/B alternation for spaces.Discrete
-            pass
+            self.last_A = "A" in self.env.unwrapped.get_action_meaning(action)
         return (
             observation,
             reward,
@@ -234,7 +248,7 @@ class MultiInputWrapper(gym.Wrapper):
         )
 
     def observation(self, obs):
-        vector = [0, 0]
+        vector = [0, 0, 0]
         # if hasattr(self.calculator, "x"):
         #     try:
         #         if (
@@ -278,18 +292,17 @@ class MultiInputWrapper(gym.Wrapper):
         #     except IndexError:
         #         pass
 
-        # if isinstance(self.action_space, spaces.MultiDiscrete):
-        #     vector[2] = self.last_A
-        # else:
-        #     # TODO: implement A/B alternation for spaces.Discrete
-        #     pass
+        # vector[2] = self.last_A
 
         # farthest point achieved to avoid breaking Markov Property
         # since some rewards are given based on reaching new screens
         vector[0] = 1 - self.calculator.min_distance / self.max_distance
 
-        # set vector[4] to HP and normalize it
+        # set vector[1] to HP and normalize it
         vector[1] = self.env.unwrapped.data["health"] / 28
+
+        # set vector[2] to invincibility frame counter and normalize it
+        vector[2] = self.env.unwrapped.data["blink_counter"] / 111
 
         return {
             "image": obs,
@@ -321,6 +334,9 @@ class ActionSkipWrapper(gym.ActionWrapper):
         self.A_frame_count = 0
         super().__init__(env)
 
+        if isinstance(self.action_space, spaces.Discrete):
+            self.action_mapper = ActionMapper(self.env, "discrete")
+
     def action(self, action):
         if isinstance(self.action_space, spaces.MultiDiscrete):
             # if holding B, will shoot every other frame
@@ -343,14 +359,24 @@ class ActionSkipWrapper(gym.ActionWrapper):
             # else:
             #     self.A_frame_count = 0
         else:
-            # TODO: implement A/B alternation for spaces.Discrete
-            pass
+            buttons = self.env.unwrapped.get_action_meaning(action)
+            pressing_b = "B" in buttons
+            if self.B_frame_count >= 1 and pressing_b:
+                buttons.remove("B")
+                action = self.action_mapper.map_action(buttons)
+                self.B_frame_count = 0
+            elif pressing_b:
+                self.B_frame_count += 1
+            else:
+                self.B_frame_count = 0
 
         return action
 
 
 class StageWrapper(gym.Wrapper):
     NO_ENEMIES_CHEATCODE = "NNLOGO"
+    # https://bisqwit.iki.fi/jutut/megamansource/maincode.txt: FindFreeObject
+    FREE_OBJECT = 0xF8
 
     def __init__(
         self,
@@ -368,6 +394,7 @@ class StageWrapper(gym.Wrapper):
         truncate_if_no_improvement=True,
         no_enemies=False,
         screen_rewards=False,
+        score_reward=0,
         distance_only_on_ground=False,
         term_back_screen=False,
     ):
@@ -388,12 +415,17 @@ class StageWrapper(gym.Wrapper):
         self.max_number_of_frames_without_improvement = (60 * 60) // frameskip
 
         if obs_space == "ram":
-            self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(53,))
+            self.observation_space = spaces.Box(
+                low=-1.0,
+                high=1.0,
+                shape=(354,),
+            )
         self.obs_space = obs_space
 
         self.no_enemies = no_enemies
 
         self.screen_rewards = screen_rewards
+        self.score_reward = score_reward
         self.term_back_screen = term_back_screen
 
     def reset(self, **kwargs):
@@ -401,6 +433,15 @@ class StageWrapper(gym.Wrapper):
             self.unwrapped.em.clear_cheats()
         self.reward_calculator.reset()
         observation, info = self.env.reset(**kwargs)
+
+        self.reward_calculator.update_position(self.unwrapped.data)
+        self.reward_calculator.prev_distance = (
+            self.reward_calculator.distance_map[
+                self.reward_calculator.y,
+                self.reward_calculator.x,
+            ]
+        )
+
         if self.no_enemies:
             # TODO: NOT WORKING, BREAKS THE GAME WHEN RESET
             for _ in range(1):
@@ -414,6 +455,9 @@ class StageWrapper(gym.Wrapper):
 
         if self.screen_rewards:
             self.prev_screen = self.unwrapped.data["screen"]
+
+        if self.score_reward > 0:
+            self.prev_score = 0
 
         return self.observation(observation), self.info(info)
 
@@ -440,57 +484,128 @@ class StageWrapper(gym.Wrapper):
         if self.obs_space == "screen":
             return obs
 
-        screen_scale = 25
-        pos_scale = 255
+        screen_scale = len(self.reward_calculator.screen_offset_map) - 1
+        rel_pos_scale = 0xFF
+        # x_scale = (
+        #     max(
+        #         screen_offset_map,
+        #         key=lambda d: d["x"],
+        #     )["x"]
+        #     * offset_width
+        #     - 1
+        # )
+        # y_scale = (
+        #     max(
+        #         screen_offset_map,
+        #         key=lambda d: d["y"],
+        #     )["y"]
+        #     * offset_height
+        #     - 1
+        # )
+        x_scale = self.reward_calculator.distance_map.shape[1] - 1
+        y_scale = self.reward_calculator.distance_map.shape[0] - 1
         x_speed_scale = 1.5
         y_speed_scale = 9
-        facing_scale = 64
-        type_scale = 255  # no idea about this one
-        alive_scale = 255  # this one too
+        health_scale = 28
+        general_scale = 0xFF
 
+        player_x, player_y = self.reward_calculator.get_global_xy(
+            obs[0x460],
+            obs[0x480],
+            obs[0x600],
+        )
         variables = [
+            # health
+            obs[0x6A] / health_scale,
             # screen count
             obs[0x460] / screen_scale,
             # X position
-            obs[0x0480] / pos_scale,
+            player_x / x_scale,
             # Y position
-            obs[0x0600] / pos_scale,
+            player_y / y_scale,
             # X speed, composed by two bytes: X_hi and X_lo
-            (obs[0x04C0] + obs[0x04E0] / pos_scale) / x_speed_scale,
+            (obs[0x4C0] + obs[0x4E0] / general_scale) / x_speed_scale,
             # Y speed, composed by two bytes: Y_hi and Y_lo.
             # TODO: I'm currently using only Y_hi, this is too much for me
-            (obs[0x0680] if obs[0x0680] < 127 else obs[0x0680] - 256 + 5)
+            (obs[0x680] if obs[0x680] < 127 else obs[0x680] - 256 + 5)
             / y_speed_scale,
-            # which side Mega Man is facing
-            obs[0x009B] / facing_scale,
-            # bullets on screen
-            obs[0x0060] - 192 / 20,
+            # flags
+            self._get_flag_from_byte(obs[0x420], 4),  # on ladder
+            self._get_flag_from_byte(obs[0x420], 6),  # facing direction
         ]
 
-        n_objects = 8
-        for i in range(n_objects):
-            variables += [
-                # i'th object's screen count
-                obs[0x0470 + i] / screen_scale,
-                # i'th object's X position
-                obs[0x0490 + i] / pos_scale,
-                # i'th object's Y position
-                obs[0x0610 + i] / pos_scale,
-                # i'th object's type
-                obs[0x06F0 + i] / type_scale,
-                # i'th object is alive? I'm not sure about this variable, but
-                # it seems to indicate if each object is alive/rendered or not
-                obs[0x007B + i] / alive_scale,
-            ]
+        variables.append(self.reward_calculator.max_screen / screen_scale)
 
         n_bullets = 3
         for i in range(n_bullets):
-            variables += [
-                # i'th bullet's X position
-                obs[0x0482 + i] / pos_scale,
-                # i'th bullet's Y position
-                obs[0x0602 + i] / pos_scale,
-            ]
+            enabled = obs[0x602 + i] != 0xF8
+            if enabled:
+                x, y = self.reward_calculator.get_global_xy(
+                    obs[0x462 + i],
+                    obs[0x482 + i],
+                    obs[0x602 + i],
+                )
+                rel_x = x - player_x
+                rel_y = y - player_y
+                variables += [
+                    1,
+                    # TODO: direction of bullet
+                    rel_x / rel_pos_scale,
+                    rel_y / rel_pos_scale,
+                ]
+            else:
+                variables += [0, 0, 0]
+
+        n_objects = 0x20
+        # OLD: start at 0x01 to ignore Mega Man himself
+        # NEW: actually, let's start at 0x10 to ignore the first 16 objects,
+        # because there doesn't seem to be anything useful there
+        # TODO: maybe vectorize all of this with numpy?
+        for i in range(0x10, n_objects):
+            # game sets Y_pos to 0xF8 to disable object
+            enabled = obs[0x602 + i] != 0xF8
+            if enabled:
+                x, y = self.reward_calculator.get_global_xy(
+                    obs[0x460 + i],
+                    obs[0x480 + i],
+                    obs[0x600 + i],
+                )
+                rel_x = x - player_x
+                rel_y = y - player_y
+                variables += [
+                    # object enabled
+                    1,
+                    # sprite number
+                    # obs[0x0400 + i] / general_scale,
+                    # flags
+                    *self._get_flags_from_byte(obs[0x420 + i]),
+                    # unknown440
+                    # *self._get_nibbles_from_byte(obs[0x0440 + i], normalize=True),
+                    # screen count
+                    # obs[0x460 + i] / screen_scale,
+                    # X position
+                    rel_x / rel_pos_scale,
+                    # X speed
+                    (obs[0x4C0 + i] + obs[0x4E0 + i] / general_scale)
+                    / x_speed_scale,
+                    # Y position
+                    rel_y / rel_pos_scale,
+                    # Y speed
+                    (
+                        obs[0x680 + i]
+                        if obs[0x680 + i] < 127
+                        else obs[0x680] - 256 + 5
+                    )
+                    / y_speed_scale,
+                    # life cycle counter (wtf is that supposed to mean? no idea)
+                    # obs[0x06A0 + i] / general_scale,
+                    # life meter
+                    # obs[0x06C0 + i] / general_scale,
+                    # type
+                    *self._get_flags_from_byte(obs[0x6E0 + i]),
+                ]
+            else:
+                variables += [0] * 21
 
         return variables
 
@@ -499,6 +614,8 @@ class StageWrapper(gym.Wrapper):
             current_screen = self.unwrapped.data["screen"]
             reward = current_screen - self.prev_screen
             self.prev_screen = current_screen
+            self.reward_calculator.get_stage_reward(self.unwrapped.data)
+            self.min_distance = self.reward_calculator.min_distance
         else:
             reward = self.reward_calculator.get_stage_reward(
                 self.unwrapped.data
@@ -507,6 +624,9 @@ class StageWrapper(gym.Wrapper):
 
         if self.reward_calculator.new_screen:
             reward += 1
+
+        if self.score_reward > 0:
+            reward += self._get_score_reward()
 
         # if self.get_wrapper_attr("statename") == "NightmarePit.state":
         #     reward = int(action[2] == 1) - int(action[1] == 2)
@@ -566,10 +686,10 @@ class StageWrapper(gym.Wrapper):
         )
 
     def info(self, info):
-        if not self.screen_rewards:
-            info["min_distance"] = self.reward_calculator.min_distance
-            info["distance"] = self.reward_calculator.prev_distance
-            info["max_screen"] = self.reward_calculator.max_screen
+        # if not self.screen_rewards:
+        info["min_distance"] = self.reward_calculator.min_distance
+        info["distance"] = self.reward_calculator.prev_distance
+        info["max_screen"] = self.reward_calculator.max_screen
         info["hp"] = self.unwrapped.data["health"]
         info["x"] = self.unwrapped.data["x"]
         info["y"] = self.unwrapped.data["y"]
@@ -585,6 +705,36 @@ class StageWrapper(gym.Wrapper):
     def set_state(self, state):
         self.env.unwrapped.em.set_state(state)
         self.prev_screen = self.unwrapped.data["screen"]
+
+    def _get_score_reward(self):
+        score = 0
+        for i in range(5):
+            score += self.env.unwrapped.get_ram()[0x74 + i] * 10**i
+
+        reward = self.score_reward if score > self.prev_score else 0
+        self.prev_score = score
+        return reward
+
+    # def _get_kill_reward(self):
+    #     n_objects = self.env.unwrapped.ram[0x0054]
+    #     ram = self.env.unwrapped.get_ram()
+    #     y_pos = np.array([ram[0x600 + i] for i in range(n_objects)])
+    #     alive_count = y_pos[y_pos != self.FREE_OBJECT].sum()
+    #     enemies_alive = [ram[0x007B + 4 * i] / alive_scale for i in range(8)]
+
+    @staticmethod
+    def _get_flags_from_byte(byte):
+        return [int(bool(byte & (1 << i))) for i in range(8)]
+
+    @staticmethod
+    def _get_nibbles_from_byte(byte, normalize=True):
+        if normalize:
+            return [(byte >> 4) / 0x0F, (byte & 0x0F) / 0x0F]
+        return [byte >> 4, byte & 0x0F]
+
+    @staticmethod
+    def _get_flag_from_byte(byte, bit):
+        return int(bool(byte & (1 << bit)))
 
 
 class StageReward:
@@ -687,24 +837,7 @@ class StageReward:
         ):
             return 0
 
-        screen = data["screen"]
-        if screen > self.max_screen:
-            self.new_screen = True
-            self.max_screen = screen
-        else:
-            self.new_screen = False
-
-        screen_offset = self.screen_offset_map[screen]
-
-        self.x = (
-            self.SCREEN_WIDTH * screen_offset["x"] + data["x"]
-        ) // self.TILE_SIZE
-        self.y = (
-            self.SCREEN_HEIGHT * screen_offset["y"]
-            # + min(data["y"] + self.MEGA_MAN_SPRITE_OFFSET_Y, 255)
-            + min(data["y"], 239)
-            # + data["y"]
-        ) // self.TILE_SIZE
+        self.update_position(data)
 
         if self.only_on_ground and data["touching_obj_top"] == 0:
             self.frames_since_last_improvement += 1
@@ -751,6 +884,25 @@ class StageReward:
         elif data["boss_health"] == 28:
             self.boss_filled_health = True
         return 0
+
+    def update_position(self, data):
+        screen = data["screen"]
+        if screen > self.max_screen:
+            self.new_screen = True
+            self.max_screen = screen
+        else:
+            self.new_screen = False
+
+        self.x, self.y = self.get_global_xy(screen, data["x"], data["y"])
+
+    def get_global_xy(self, screen, x, y):
+        screen_offset = self.screen_offset_map[screen]
+        x = (self.SCREEN_WIDTH * screen_offset["x"] + x) // self.TILE_SIZE
+        y = (
+            self.SCREEN_HEIGHT * screen_offset["y"]
+            + min(y, self.SCREEN_HEIGHT - 1)
+        ) // self.TILE_SIZE
+        return x, y
 
     def _is_in_boss_room(self, data):
         return data["screen"] == len(self.screen_offset_map) - 1

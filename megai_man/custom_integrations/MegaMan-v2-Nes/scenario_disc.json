@@ -1,0 +1,20 @@
+{
+  "actions": [
+    [
+      [],
+      ["UP"],
+      ["DOWN"],
+      ["LEFT"],
+      ["RIGHT"],
+      ["A"],
+      ["B"],
+      ["A", "B"],
+      ["LEFT", "A"],
+      ["RIGHT", "A"],
+      ["LEFT", "B"],
+      ["RIGHT", "B"],
+      ["LEFT", "A", "B"],
+      ["RIGHT", "A", "B"]
+    ]
+  ]
+}

@@ -123,7 +123,7 @@ class WideNatureCNN(BaseFeaturesExtractor):
 
 
 class CustomCombinedExtractor(BaseFeaturesExtractor):
-    MLP_OUTPUT_DIM = 2
+    MLP_OUTPUT_DIM = 3
 
     def __init__(self, observation_space: gym.spaces.Dict, cnn_output_dim=512):
         super(CustomCombinedExtractor, self).__init__(
@@ -174,7 +174,7 @@ class CustomMultiInputPolicy(ActorCriticPolicy):
             *args,
             **kwargs,
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=512),
+            features_extractor_kwargs=dict(cnn_output_dim=256),
         )
 
 
@@ -184,5 +184,5 @@ class CustomMultiInputLstmPolicy(MultiInputLstmPolicy):
             *args,
             **kwargs,
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=512),
+            features_extractor_kwargs=dict(cnn_output_dim=256),
         )

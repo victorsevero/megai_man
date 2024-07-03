@@ -51,6 +51,10 @@
     "touching_obj_side": {
       "address": 148,
       "type": "|u1"
+    },
+    "blink_counter": {
+      "address": 85,
+      "type": "|u1"
     }
   }
 }

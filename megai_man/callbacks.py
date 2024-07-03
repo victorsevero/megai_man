@@ -130,6 +130,11 @@ class CuriosityCallback(BaseCallback):
         self.buffer.advantages += intrinsic_rewards.cpu().numpy()
         self.buffer.returns += intrinsic_rewards.cpu().numpy()
 
+        self.logger.record(
+            "rollout/intrinsic_rewards",
+            safe_mean(intrinsic_rewards.cpu().numpy()),
+        )
+
 
 class TrainingStatsLoggerCallback(BaseCallback):
     def __init__(self, verbose=0):

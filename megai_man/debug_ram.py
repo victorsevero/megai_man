@@ -29,25 +29,18 @@ class Debugger:
         self.font = pygame.font.SysFont("opensans", self.font_size)
         self.small_font = pygame.font.SysFont("opensans", 12)
         frameskip = 4
-        self.frame_stack = 3
-        self.multi_input = True
         self.action_space = "multi_discrete"
         if model is not None and "/dqn_" in model:
             ModelClass = DQN
         else:
-            if self.frame_stack > 1:
-                ModelClass = PPO
-            else:
-                ModelClass = RecurrentPPO
+            ModelClass = PPO
         self.env = make_venv(
             n_envs=1,
             state="CutMan",
-            # state="NightmarePit",
             screen=None,
             frameskip=frameskip,
-            frame_stack=self.frame_stack,
             truncate_if_no_improvement=True,
-            obs_space="screen",
+            obs_space="ram",
             action_space=self.action_space,
             crop_img=False,
             invincible=False,
@@ -55,12 +48,11 @@ class Debugger:
             render_mode=None,
             record=record,
             damage_terminate=False,
-            fixed_damage_punishment=0.12,
+            fixed_damage_punishment=0.05,
             forward_factor=0.05,
             backward_factor=0.055,
-            multi_input=self.multi_input,
             screen_rewards=False,
-            score_reward=0.01,
+            score_reward=0.00,
             distance_only_on_ground=True,
             term_back_screen=True,
         )
@@ -69,7 +61,6 @@ class Debugger:
         if model is not None:
             self.model = ModelClass.load(model, env=self.env)
         self.graph = graph
-        self.record_grayscale_obs = record_grayscale_obs
         self.frame_by_frame = frame_by_frame
         self.deterministic = deterministic
         self.action_mapper = ActionMapper(self.retro_env, self.action_space)
@@ -86,16 +77,14 @@ class Debugger:
         self.n_lines = len(self.box_text.split("\n"))
         self.pad = 5
         self.graph_color = (255, 255, 255)
-        self.grad_cam = grad_cam
 
     def _setup_screen(self):
         width, height = 240, 224
-        resize_factor = 5
+        resize_factor = 4
+        env_resize_boost = 10
 
         obs_space = self.env.observation_space
-        if self.multi_input:
-            obs_space = obs_space["image"]
-        env_height, env_width = obs_space.shape[1:]
+        env_height = env_width = int(np.ceil(np.sqrt(obs_space.shape[0])))
 
         self.text_area_width = 800
         self.screen = pygame.display.set_mode(
@@ -111,25 +100,21 @@ class Debugger:
         self.width = width
         self.height = height
         self.resize_factor = resize_factor
+        self.env_resize_boost = env_resize_boost
 
     def render_screen(self, obs):
-        if self.model is not None and self.grad_cam:
-            env_screen = np.uint8(0.4 * np.stack((obs.T,) * 4, axis=-1))
-            heatmap = cv2.resize(
-                self.heatmap,
-                obs.shape,
-            )
-            env_screen = np.clip(
-                env_screen.astype(np.uint16) + heatmap,
-                a_min=0,
-                a_max=255,
-            ).astype(np.uint8)
-            env_screen = env_screen[:, :, :-1]
-        else:
-            env_screen = np.stack((obs.T,) * 3, axis=-1)
+        new_size = self.env_width * self.env_height
+        pad_size = new_size - obs.shape[0]
+        obs = np.pad(obs, (0, pad_size))
+        obs = obs.reshape(self.env_height, self.env_width)
+        env_screen = np.stack((obs.T,) * 3, axis=-1)
+        env_screen = ((env_screen / 2 + 0.5) * 255).astype(np.uint8)
 
         surface = pygame.surfarray.make_surface(env_screen)
-        surface = pygame.transform.scale_by(surface, self.resize_factor)
+        surface = pygame.transform.scale_by(
+            surface,
+            self.resize_factor + self.env_resize_boost,
+        )
         self.screen.blit(surface, (0, 0))
 
         screen = self._get_screen()
@@ -137,7 +122,10 @@ class Debugger:
         surface = pygame.surfarray.make_surface(screen)
         surface = pygame.transform.scale_by(surface, self.resize_factor)
 
-        self.screen.blit(surface, (self.env_width * self.resize_factor, 0))
+        self.screen.blit(
+            surface,
+            (self.env_width * (self.resize_factor + self.env_resize_boost), 0),
+        )
 
     def display_info(self, action, probs, vf, infos, reward):
         self.debug_messages.append(
@@ -151,7 +139,8 @@ class Debugger:
         self.debug_messages = self.debug_messages[-max_messages:]
 
         debug_area_rect = pygame.Rect(
-            (self.env_width + self.width) * self.resize_factor,
+            self.env_width * (self.resize_factor + self.env_resize_boost)
+            + self.width * self.resize_factor,
             0,
             self.text_area_width,
             self.height * self.resize_factor,
@@ -175,7 +164,8 @@ class Debugger:
 
             self.render_text(
                 info_lines,
-                (self.env_width + self.width) * self.resize_factor
+                self.env_width * (self.resize_factor + self.env_resize_boost)
+                + self.width * self.resize_factor
                 + 2 * self.pad,
                 y_pos,
             )
@@ -351,7 +341,8 @@ class Debugger:
         overlay_rect = pygame.Rect(
             0,
             0,
-            (self.env_width + self.width) * self.resize_factor,
+            self.env_width * (self.resize_factor + self.env_resize_boost)
+            + self.width * self.resize_factor,
             self.height * self.resize_factor,
         )
         overlay = pygame.Surface(
@@ -367,7 +358,7 @@ class Debugger:
         )
         text_rect = pause_text.get_rect(
             center=(
-                self.env_width * self.resize_factor
+                self.env_width * (self.resize_factor + self.env_resize_boost)
                 + self.width * self.resize_factor / 2,
                 overlay_rect.height / 2,
             )
@@ -383,49 +374,8 @@ class Debugger:
         )
         pygame.display.flip()
 
-    def draw_arrow(self, vector):
-        return
-        vector[1] = -vector[1]
-        vector = vector[:2]
-        arrow_scale = 100
-        vector *= arrow_scale
-        start = (
-            self.resize_factor * (self.env_width + 240 // 2),
-            self.resize_factor * 224 // 2,
-        )
-        end = (start[0] + vector[0], start[1] + vector[1])
-        color = (255, 0, 0)
-
-        if np.array_equal(vector, (0, 0)):
-            pygame.draw.circle(self.screen, color, center=start, radius=5)
-            pygame.display.flip()
-            return
-
-        pygame.draw.line(self.screen, color, start, end, 5)
-        vector_norm = vector / np.linalg.norm(vector)
-        angle = np.arctan2(vector_norm[1], vector_norm[0])
-        arrow_angle = np.pi / 6
-
-        left = end - arrow_scale / 3 * np.array(
-            [np.cos(angle - arrow_angle), np.sin(angle - arrow_angle)]
-        )
-        right = end - arrow_scale / 3 * np.array(
-            [np.cos(angle + arrow_angle), np.sin(angle + arrow_angle)]
-        )
-
-        pygame.draw.polygon(self.screen, color, [end, left, right])
-        pygame.display.flip()
-
     def run(self):
         obs = self.env.reset()
-        if self.multi_input:
-            vector = obs["vector"][0]
-            image = obs["image"]
-        else:
-            image = obs
-        if self.frame_stack == 1:
-            self.lstm_states = None
-            self.episode_starts = np.ones((1,), dtype=bool)
         buttons = ["N/A"]
         action_probs = "N/A"
         vf = "N/A"
@@ -437,35 +387,18 @@ class Debugger:
         self.step = 0
 
         while not done:
-            if self.multi_input:
-                self.draw_arrow(vector)
-
             if self.model is None and not self.handle_events():
                 break
-
-            if self.record_grayscale_obs:
-                cv2.imwrite(
-                    f"dataset/cutman/{self.step}.png",
-                    np.moveaxis(image[0], 0, -1),
-                )
 
             if self.model is None:
                 keys = pygame.key.get_pressed()
                 action, buttons = self.action_mapper.map_keys(keys)
                 vf = "N/A"
             else:
-                if self.frame_stack > 1:
-                    action, _ = self.model.predict(
-                        obs,
-                        deterministic=self.deterministic,
-                    )
-                else:
-                    action, self.lstm_states = self.model.predict(
-                        obs,
-                        state=self.lstm_states,
-                        episode_start=self.episode_starts,
-                        deterministic=self.deterministic,
-                    )
+                action, _ = self.model.predict(
+                    obs,
+                    deterministic=self.deterministic,
+                )
                 action = action[0]
                 buttons = self.retro_env.get_action_meaning(action)
                 if self.action_space == "multi_discrete":
@@ -475,10 +408,7 @@ class Debugger:
                     action_probs = "N/A"
                 vf = self._get_model_vf(obs)
 
-                if self.grad_cam:
-                    self._grad_cam(obs)
-
-            self.render_screen(image[0, -1])
+            self.render_screen(obs[0])
             self.display_info(
                 ", ".join(buttons),
                 action_probs,
@@ -495,13 +425,6 @@ class Debugger:
                 break
 
             obs, rewards, dones, infos = self.env.step([action])
-            if self.multi_input:
-                vector = obs["vector"][0]
-                image = obs["image"]
-            else:
-                image = obs
-            if self.frame_stack == 1:
-                self.episode_starts = dones
             cum_reward += rewards[0]
             self.cum_rewards.append(cum_reward)
             done = dones[0]
@@ -511,18 +434,11 @@ class Debugger:
         self.handle_events()
 
     def _get_screen(self):
-        return self.retro_env.img
+        return self.retro_env.em.get_screen()
 
     def _get_action_probs(self, obs):
         cuda_obs, _ = self.model.policy.obs_to_tensor(obs)
-        if self.frame_stack > 1:
-            distribution = self.model.policy.get_distribution(cuda_obs)
-        else:
-            distribution = self.model.policy.get_distribution(
-                cuda_obs,
-                [torch.from_numpy(state).cuda() for state in self.lstm_states],
-                torch.tensor(self.episode_starts, dtype=torch.float32).cuda(),
-            )[0]
+        distribution = self.model.policy.get_distribution(cuda_obs)
         probs = [
             x.probs.detach().cpu().numpy()[0]
             for x in distribution.distribution
@@ -563,21 +479,7 @@ class Debugger:
         if isinstance(self.model, DQN):
             value_function = self.model.q_net(cuda_obs)[0].max()
         else:
-            if self.frame_stack > 1:
-                value_function = self.model.policy.predict_values(cuda_obs)[
-                    0, 0
-                ]
-            else:
-                value_function = self.model.policy.predict_values(
-                    cuda_obs,
-                    [
-                        torch.from_numpy(state).cuda()
-                        for state in self.lstm_states
-                    ],
-                    torch.tensor(
-                        self.episode_starts, dtype=torch.float32
-                    ).cuda(),
-                )[0, 0]
+            value_function = self.model.policy.predict_values(cuda_obs)[0, 0]
         value_function = value_function.detach().cpu().numpy()
         return f"{value_function:.2f}"
 
@@ -635,26 +537,24 @@ class TensorExtractor(nn.Module):
 
 
 if __name__ == "__main__":
-    model = (
-        "checkpoints/"
-        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+screen1_scorerew0_dmg0.05_groundonly_termbackscreen2_spikefix6_scen5multi_skipB_multinput5_default_NO_ENEMIES2_visible"
-        "_15000000_steps"
-    )
+    # model = (
+    #     "checkpoints/"
+    #     "sevs_steps2048_batch64_lr3.0e-04_epochs10_clip0.2_ecoef1e-03_gamma0.99_vf0.5__fs4_stack4_rews0.05+screen1_dmg0.12_groundonly_termbackscreen2_spikefix6_scen4_skipB_multinput5_default_visible"
+    #     "_5000000_steps"
+    # )
     # model = (
     #     "models/"
     #     "sevs_steps512_batch64_lr3.0e-04_epochs10_clip0.2_ecoef1e-03_gamma0.99_vf0.5__fs4_stack4_rews0.05+screen1_dmg0.12_groundonly_termbackscreen2_spikefix6_scen4_skipB_multinput5_default_visible"
     #     ".zip"
     # )
-    # model = (
-    #     "models/"
-    #     "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+screen1_scorerew0_dmg0.05_groundonly_termbackscreen2_spikefix6_scen5multi_skipB_multinput5_default_NO_ENEMIES2_visible"
-    #     "_best/best_model"
-    # )
+    model = (
+        "models/"
+        "ram2.3_steps512_batch64_lr1.0e-04_epochs10_clip0.2_ecoef1e-04_nn256x2_relu_twoFEs__rews0.05+screen1_dmg0.05_groundrew_termbackscreen2"
+        "_best/best_model"
+    )
     debugger = Debugger(
-        model=model,
-        deterministic=True,
-        # frame_by_frame=True,
+        # model=model,
+        frame_by_frame=False,
         # graph=True,
-        # grad_cam=False,
     )
     debugger.run()

@@ -30,6 +30,8 @@ optuna-dashboard = "^0.14.0"
 torchvision = "^0.17.1"
 snakeviz = "^2.2.0"
 rich = "^13.7.1"
+torchviz = "^0.0.2"
+torch-summary = "^1.4.5"
 
 [build-system]
 requires = ["poetry-core"]

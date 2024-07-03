@@ -35,7 +35,7 @@ def test():
         state="CutMan",
         screen=None,
         frameskip=4,
-        frame_stack=1,
+        frame_stack=3,
         truncate_if_no_improvement=True,
         obs_space="screen",
         action_space="multi_discrete",
@@ -47,26 +47,26 @@ def test():
         fixed_damage_punishment=1,
         forward_factor=0.05,
         backward_factor=0.055,
-        multi_input=False,
+        multi_input=True,
         distance_only_on_ground=True,
         term_back_screen=True,
     )
-    model_name = (
-        "checkpoints/"
-        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
-        "_16000000_steps"
-    )
     # model_name = (
-    #     "models/"
-    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99__fs4_stack1rews0.05+screen1_dmg0.5_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
-    #     "_best/best_model"
+    #     "checkpoints/"
+    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
+    #     "_16000000_steps"
     # )
+    model_name = (
+        "models/"
+        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+screen1_scorerew0_dmg0.05_groundonly_termbackscreen2_spikefix6_scen5multi_skipB_multinput5_default_NO_ENEMIES2_visible"
+        "_best/best_model"
+    )
     # model_name = (
     #     "models/"
     #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
     #     ".zip"
     # )
-    model = RecurrentPPO.load(model_name, env=venv)
+    model = PPO.load(model_name, env=venv)
 
     evaluate_policy_details(model, venv, deterministic=True)
 

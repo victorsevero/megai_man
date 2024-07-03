@@ -3,12 +3,12 @@ from pathlib import Path
 import numpy as np
 import optuna
 import yaml
-from callbacks import MinDistanceCallback
-from env import make_venv
 from optuna.samplers import RandomSampler
 from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
-from train import model_name_from
+
+from megai_man.callbacks import MinDistanceCallback
+from megai_man.env import make_venv
 
 
 def sample_params(trial: optuna.Trial, n_envs: int, n_steps: int):

@@ -10,7 +10,7 @@ from torch import nn
 from torchvision import utils
 from tqdm import trange
 
-FRAMESTACK_NUMBER = 1
+FRAMESTACK_NUMBER = 4
 
 torch.autograd.set_grad_enabled(True)
 
@@ -131,10 +131,11 @@ def deprocess_image(x):
 
 if __name__ == "__main__":
     model_name = (
-        "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1_twoFEs__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_spikefix6_scen3_actionskipB_recurrent"
+        "sevs_steps512_batch64_lr3.0e-04_epochs10_clip0.2_ecoef1e-03_gamma0.99_vf0.5__fs4_stack4_rews0.05+screen1_dmg0.12_groundonly_termbackscreen2_spikefix6_scen4_skipB_multinput5_default_visible"
         "_best/best_model"
     )
-    model = RecurrentPPO.load(f"models/{model_name}")
+
+    model = PPO.load(f"models/{model_name}")
 
     try:
         cnn = model.policy.features_extractor.cnn
@@ -150,5 +151,5 @@ if __name__ == "__main__":
                 model=model,
                 out_size=model[conv2d_idx].out_channels,
                 layer_idx=conv2d_idx,
-                channel=0,
+                channel=-1,
             )

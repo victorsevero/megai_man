@@ -29,28 +29,42 @@ def test():
     venv = make_venv(
         n_envs=1,
         state="CutMan",
-        damage_terminate=False,
-        truncate_if_no_improvement=False,
+        frameskip=4,
+        frame_stack=4,
+        truncate_if_no_improvement=True,
         obs_space="ram",
+        action_space="multi_discrete",
         render_mode="human",
-        record=".",
+        # record=".",
+        damage_terminate=False,
+        fixed_damage_punishment=0.05,
+        forward_factor=0.05,
+        backward_factor=0.055,
+        multi_input=False,
+        distance_only_on_ground=True,
+        term_back_screen=True,
     )
 
-    model_name = "envfix4_ram_entropy"
-    model = PPO.load(f"models/{model_name}", env=venv)
-
-    deterministic = True
-
-    # rewards, lengths = evaluate_policy(
-    #     model=model,
-    #     env=venv,
-    #     n_eval_episodes=1,
-    #     deterministic=True,
-    #     return_episode_rewards=deterministic,
+    # model_name = (
+    #     "checkpoints/"
+    #     "ram_bignet__rews0.05+screen1_dmg0.05"
+    #     "_1000000_steps"
     # )
-    # print(f"Episode length: {lengths[0]}; Episode reward: {rewards[0]}")
+    model_name = (
+        # fmt: off
+        "models/"
+        "ram_steps512_batch64_bignet__rews0.05+screen1_dmg0.05_groundrew_termbackscreen2"
+        "_best/best_model"
+        # fmt: on
+    )
+    # model_name = (
+    #     "models/"
+    #     "sevs_all_steps512_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf1__fs4_stack1rews0.05+screen1_dmg0.12_time_punishment0_groundonly_termbackscreen2_trunc60snoprog_spikefix6_scen3_actionskipB_recurrent"
+    #     ".zip"
+    # )
 
-    evaluate_policy_details(model, venv, deterministic=deterministic)
+    model = PPO.load(model_name, env=venv)
+    evaluate_policy_details(model, venv, deterministic=True)
 
 
 if __name__ == "__main__":
