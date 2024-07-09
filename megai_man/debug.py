@@ -4,7 +4,8 @@ import numpy as np
 import pygame
 import torch
 from env import make_venv
-from sb3_contrib import RecurrentPPO
+from sb3_contrib import MaskablePPO, RecurrentPPO
+from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.preprocessing import preprocess_obs
 from torch import nn
@@ -50,8 +51,7 @@ class Debugger:
             obs_space="screen",
             action_space=self.action_space,
             crop_img=False,
-            invincible=False,
-            no_enemies=False,
+            no_enemies=True,
             render_mode=None,
             record=record,
             damage_terminate=False,
@@ -60,7 +60,7 @@ class Debugger:
             backward_factor=0.055,
             multi_input=self.multi_input,
             screen_rewards=False,
-            score_reward=0.01,
+            score_reward=0,
             distance_only_on_ground=True,
             term_back_screen=True,
         )
@@ -455,10 +455,18 @@ class Debugger:
                 vf = "N/A"
             else:
                 if self.frame_stack > 1:
-                    action, _ = self.model.predict(
-                        obs,
-                        deterministic=self.deterministic,
-                    )
+                    if isinstance(self.model, MaskablePPO):
+                        action_masks = get_action_masks(self.env)
+                        action, _ = self.model.predict(
+                            obs,
+                            deterministic=self.deterministic,
+                            action_masks=action_masks,
+                        )
+                    else:
+                        action, _ = self.model.predict(
+                            obs,
+                            deterministic=self.deterministic,
+                        )
                 else:
                     action, self.lstm_states = self.model.predict(
                         obs,
@@ -516,7 +524,16 @@ class Debugger:
     def _get_action_probs(self, obs):
         cuda_obs, _ = self.model.policy.obs_to_tensor(obs)
         if self.frame_stack > 1:
-            distribution = self.model.policy.get_distribution(cuda_obs)
+            if isinstance(self.model, MaskablePPO):
+                action_masks = get_action_masks(self.env)
+                distribution = self.model.policy.get_distribution(
+                    cuda_obs,
+                    action_masks=action_masks,
+                )
+                print(dir(distribution))
+                print(distribution.distribution)
+            else:
+                distribution = self.model.policy.get_distribution(cuda_obs)
         else:
             distribution = self.model.policy.get_distribution(
                 cuda_obs,
@@ -528,15 +545,25 @@ class Debugger:
             for x in distribution.distribution
         ]
         # TODO: make this programatically, I'm too lazy for this right now
+        # probs = {
+        #     "B": {"Y": probs[0][1], "N": probs[0][0]},
+        #     "A": {"Y": probs[2][1], "N": probs[2][0]},
+        #     "D": {
+        #         "U": probs[1][1],
+        #         "D": probs[1][2],
+        #         "L": probs[1][3],
+        #         "R": probs[1][4],
+        #         "N": probs[1][0],
+        #     },
+        # }
         probs = {
-            "B": {"Y": probs[0][1], "N": probs[0][0]},
-            "A": {"Y": probs[2][1], "N": probs[2][0]},
+            "A": {"Y": probs[1][1], "N": probs[1][0]},
             "D": {
-                "U": probs[1][1],
-                "D": probs[1][2],
-                "L": probs[1][3],
-                "R": probs[1][4],
-                "N": probs[1][0],
+                "U": probs[0][1],
+                "D": probs[0][2],
+                "L": probs[0][3],
+                "R": probs[0][4],
+                "N": probs[0][0],
             },
         }
         return self.dict_to_custom_string(probs)
@@ -637,8 +664,8 @@ class TensorExtractor(nn.Module):
 if __name__ == "__main__":
     model = (
         "checkpoints/"
-        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+screen1_scorerew0_dmg0.05_groundonly_termbackscreen2_spikefix6_scen5multi_skipB_multinput5_default_NO_ENEMIES2_visible"
-        "_15000000_steps"
+        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+scrn1_scorerew0_dmg0.05_ground_termbackscrn_spikefix6_Vscrnfix2_scen5multnoB_skipB_multin5def_NO_ENEM2_vsbl"
+        "_9000000_steps"
     )
     # model = (
     #     "models/"
@@ -651,9 +678,9 @@ if __name__ == "__main__":
     #     "_best/best_model"
     # )
     debugger = Debugger(
-        model=model,
-        deterministic=True,
-        # frame_by_frame=True,
+        # model=model,
+        deterministic=False,
+        frame_by_frame=True,
         # graph=True,
         # grad_cam=False,
     )

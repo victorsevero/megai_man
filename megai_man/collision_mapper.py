@@ -170,6 +170,10 @@ def is_inside_NxN_square(node1, node2, N=3):
     return (abs(node1[0] - node2[0]) <= N) and (abs(node1[1] - node2[1]) <= N)
 
 
+def get_distance(node1, node2):
+    return abs(node1[0] - node2[0]) + abs(node1[1] - node2[1])
+
+
 def is_neighborhood_close_enough(
     current,
     neighbor,
@@ -192,8 +196,9 @@ def is_neighborhood_close_enough(
             if (y, x) == neighbor:
                 continue
             if (
-                is_inside_NxN_square((y, x), current, N=3)
+                is_inside_NxN_square((y, x), current, N=max_distance)
                 and get_relative_height(label_grid, (y, x)) == 0
+                and get_distance((y, x), current) < 2 * max_distance
             ):
                 return True
 
@@ -251,8 +256,8 @@ def wavefront_expansion(grid, allow_chokepoints=False, allow_any_jump=False):
 
     while queue:
         current = queue.pop(0)
-        for dir_x, dir_y in directions:
-            neighbor = (current[0] + dir_x, current[1] + dir_y)
+        for dir_y, dir_x in directions:
+            neighbor = (current[0] + dir_y, current[1] + dir_x)
             if (
                 0 <= neighbor[0] < grid.shape[0]
                 and 0 <= neighbor[1] < grid.shape[1]

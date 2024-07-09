@@ -1,3 +1,4 @@
+import itertools
 from pathlib import Path
 
 import cv2
@@ -14,7 +15,7 @@ SPIKE_VALUE = 3
 
 
 class VecRemoveVectorStacks(VecEnvWrapper):
-    VECTOR_SIZE = 3
+    VECTOR_SIZE = 1
 
     def __init__(self, venv: VecEnv):
         super().__init__(venv)
@@ -215,7 +216,7 @@ class MultiInputWrapper(gym.Wrapper):
                 "vector": gym.spaces.Box(
                     low=0,
                     high=1,
-                    shape=(3,),
+                    shape=(1,),
                     dtype=np.float32,
                 ),
             }
@@ -235,10 +236,10 @@ class MultiInputWrapper(gym.Wrapper):
             action
         )
         observation = self.observation(observation)
-        if isinstance(self.action_space, spaces.MultiDiscrete):
-            self.last_A = action[2]
-        else:
-            self.last_A = "A" in self.env.unwrapped.get_action_meaning(action)
+        # if isinstance(self.action_space, spaces.MultiDiscrete):
+        #     self.last_A = action[2]
+        # else:
+        #     self.last_A = "A" in self.env.unwrapped.get_action_meaning(action)
         return (
             observation,
             reward,
@@ -248,7 +249,7 @@ class MultiInputWrapper(gym.Wrapper):
         )
 
     def observation(self, obs):
-        vector = [0, 0, 0]
+        vector = [0]
         # if hasattr(self.calculator, "x"):
         #     try:
         #         if (
@@ -298,11 +299,11 @@ class MultiInputWrapper(gym.Wrapper):
         # since some rewards are given based on reaching new screens
         vector[0] = 1 - self.calculator.min_distance / self.max_distance
 
-        # set vector[1] to HP and normalize it
-        vector[1] = self.env.unwrapped.data["health"] / 28
+        # # set vector[1] to HP and normalize it
+        # vector[1] = self.env.unwrapped.data["health"] / 28
 
-        # set vector[2] to invincibility frame counter and normalize it
-        vector[2] = self.env.unwrapped.data["blink_counter"] / 111
+        # # set vector[2] to invincibility frame counter and normalize it
+        # vector[2] = self.env.unwrapped.data["blink_counter"] / 111
 
         return {
             "image": obs,
@@ -374,7 +375,6 @@ class ActionSkipWrapper(gym.ActionWrapper):
 
 
 class StageWrapper(gym.Wrapper):
-    NO_ENEMIES_CHEATCODE = "NNLOGO"
     # https://bisqwit.iki.fi/jutut/megamansource/maincode.txt: FindFreeObject
     FREE_OBJECT = 0xF8
 
@@ -411,6 +411,7 @@ class StageWrapper(gym.Wrapper):
         self.target_screen = screen
         self.damage_terminate = damage_terminate
         self.truncate_if_no_improvement = truncate_if_no_improvement
+        self.frameskip = frameskip
         # max number of frames: NES' FPS * seconds // frameskip
         self.max_number_of_frames_without_improvement = (60 * 60) // frameskip
 
@@ -429,8 +430,6 @@ class StageWrapper(gym.Wrapper):
         self.term_back_screen = term_back_screen
 
     def reset(self, **kwargs):
-        if self.no_enemies:
-            self.unwrapped.em.clear_cheats()
         self.reward_calculator.reset()
         observation, info = self.env.reset(**kwargs)
 
@@ -442,13 +441,6 @@ class StageWrapper(gym.Wrapper):
             ]
         )
 
-        if self.no_enemies:
-            # TODO: NOT WORKING, BREAKS THE GAME WHEN RESET
-            for _ in range(1):
-                observation, *_, info = self.env.step(
-                    np.zeros(self.action_space.shape, dtype=np.int64)
-                )
-            self.unwrapped.em.add_cheat(self.NO_ENEMIES_CHEATCODE)
         self.prev_lives = self.unwrapped.data["lives"]
         if self.damage_terminate:
             self.prev_health = self.unwrapped.data["health"]
@@ -462,13 +454,16 @@ class StageWrapper(gym.Wrapper):
         return self.observation(observation), self.info(info)
 
     def step(self, action):
-        for _ in range(60 * 10):
-            observation, _, terminated, truncated, info = self.env.step(action)
-            if self.unwrapped.data["camera_y"] == 0:
-                break
-
-        if (terminated or truncated) and self.no_enemies:
-            self.env.unwrapped.em.clear_cheats()
+        observation, _, terminated, truncated, info = self.env.step(action)
+        if self.unwrapped.data["camera_y"] != 0:
+            while self.unwrapped.data["camera_y"] != 0:
+                observation, _, terminated, truncated, info = self.env.step(
+                    np.zeros(self.action_space.shape, dtype=np.int64)
+                )
+            for _ in range(int(np.ceil(35 / self.frameskip))):
+                observation, _, terminated, truncated, info = self.env.step(
+                    np.zeros(self.action_space.shape, dtype=np.int64)
+                )
 
         return (
             self.observation(observation),
@@ -705,6 +700,25 @@ class StageWrapper(gym.Wrapper):
     def set_state(self, state):
         self.env.unwrapped.em.set_state(state)
         self.prev_screen = self.unwrapped.data["screen"]
+
+    def action_masks(self):
+        # NOTE: REALLY IMPORTANT! Make the same changes in sb3-contrib as in
+        # https://github.com/Stable-Baselines-Team/stable-baselines3-contrib/issues/49#issuecomment-2126473226
+        # TODO: mask L/R when on ladder and already facing direction
+        if self.no_enemies:
+            # remove shooting when there are no enemies
+            if isinstance(self.action_space, spaces.Discrete):
+                return NotImplementedError("No masking for Discrete actions")
+            elif isinstance(self.action_space, spaces.MultiDiscrete):
+                mask = [True] * sum(self.action_space.nvec)
+                mask[1] = False  # B button press
+                return mask
+            else:
+                raise NotImplementedError(
+                    f"No masking for {self.action_space}"
+                )
+        else:
+            return [True] * sum(self.action_space.nvec)
 
     def _get_score_reward(self):
         score = 0

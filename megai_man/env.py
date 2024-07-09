@@ -35,7 +35,6 @@ def make_venv(
     obs_space="screen",
     action_space="multi_discrete",
     crop_img=True,
-    invincible=False,
     render_mode="human",
     record=False,
     multi_input=False,
@@ -51,7 +50,6 @@ def make_venv(
             obs_space=obs_space,
             action_space=action_space,
             crop_img=crop_img,
-            invincible=invincible,
             render_mode=render_mode,
             record=record,
             multi_input=multi_input,
@@ -82,7 +80,6 @@ def make_env(
     obs_space="screen",
     action_space="multi_discrete",
     crop_img=True,
-    invincible=False,
     render_mode="human",
     record=False,
     multi_input=False,
@@ -113,9 +110,8 @@ def make_env(
         record=record,
         obs_type=obs_type,
     )
-    env = ActionSkipWrapper(env)
-    if invincible:
-        env.unwrapped.em.add_cheat("VVXXAPSZ")
+    if not stage_wrapper_kwargs.get("no_enemies", False):
+        env = ActionSkipWrapper(env)
     if frameskip > 1:
         env = FrameskipWrapper(env, skip=frameskip)
     if not truncate_if_no_improvement:

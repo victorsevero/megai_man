@@ -9,7 +9,8 @@ from callbacks import (
 from env import make_venv
 from rllte.xplore.reward.icm import ICM
 from rllte.xplore.reward.rnd import RND
-from sb3_contrib import RecurrentPPO
+from sb3_contrib import MaskablePPO, RecurrentPPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
@@ -20,8 +21,8 @@ from megai_man.policy import CustomMultiInputLstmPolicy, CustomMultiInputPolicy
 
 
 def train():
-    AlgoClass = PPO
-    multi_input = True
+    AlgoClass = MaskablePPO
+    multi_input = False
     n_envs = 8
     frameskip = 4
     frame_stack = 3
@@ -29,7 +30,6 @@ def train():
     env_kwargs = {
         "n_envs": n_envs,
         "state": "CutMan",
-        # "state": "NightmarePit",
         "screen": None,
         "frameskip": frameskip,
         "frame_stack": frame_stack,
@@ -37,8 +37,7 @@ def train():
         "obs_space": "screen",
         "action_space": "multi_discrete",
         "crop_img": False,
-        "invincible": False,
-        "no_enemies": False,
+        "no_enemies": True,
         "render_mode": None,
         "damage_terminate": False,
         "fixed_damage_punishment": 0.05,
@@ -67,8 +66,8 @@ def train():
         "gamma": 0.99,
         "gae_lambda": 0.95,
         "clip_range": 0.2,
-        "ent_coef": 1e-3,
-        "vf_coef": 0.5,
+        "ent_coef": 1e-4,
+        "vf_coef": 1,
         "max_grad_norm": 0.5,
         "policy_kwargs": {
             "share_features_extractor": False,
@@ -107,31 +106,32 @@ def train():
         # "_crop224"
         # "_hw224"
         # "_Near"
-        "_rews0.05+screen1"
+        f"_rews{env_kwargs['forward_factor']}+scrn1"
         f"_scorerew{env_kwargs['score_reward']}"
         f"_dmg{env_kwargs['fixed_damage_punishment']}"
         # "screenrews"
         # f"_time_punish{time_punishment_factor}"
-        "_groundonly"
+        "_ground"
         # "_trunc6min"
-        "_termbackscreen2"
+        "_termbackscrn"
         # "_dmgterm"
         # "_trunc60snoprog"
         # fmt: off
         "_spikefix6"
-        "_scen5multi"
-        "_skipB"
+        "_Vscrnfix2"
+        "_scen5multnoB"
+        # "_skipB"
         # fmt: on
-        "_multinput5_default"
+        f"{'_multin6def' if multi_input else ''}"
         # "_recurrent"
+        f"{'_mask' if AlgoClass == MaskablePPO else ''}"
         # "_contmap"
         # "_NIGHTMAREREW"
         # "_RE3"
         # "_curriculum500k"
-        # "_INVINCIBLE"
-        "_NO_ENEMIES2"
+        "_NO_ENEM2"
         # "_editROM3"
-        "_visible"
+        "_vsbl"
     )
     tensorboard_log = "logs/cutman"
     if Path(f"models/{model_name}.zip").exists():
@@ -167,9 +167,11 @@ def train():
             "n_envs": 1,
             "screen": None,
             "render_mode": None,
+            # "_enforce_subproc": True,
         }
     )
-    eval_callback = EvalCallback(
+    # eval_callback = EvalCallback(
+    eval_callback = MaskableEvalCallback(
         # same env, just replacing n_envs with 1
         eval_venv,
         n_eval_episodes=1,
