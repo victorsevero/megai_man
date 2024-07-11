@@ -117,7 +117,7 @@ def train():
         # "_dmgterm"
         # "_trunc60snoprog"
         # fmt: off
-        "_spikefix6"
+        "_spikefix7"
         "_Vscrnfix2"
         "_scen5multnoB"
         # "_skipB"
@@ -155,7 +155,7 @@ def train():
             device="cuda",
             **model_kwargs,
         )
-    total_timesteps = 20_000_000
+    total_timesteps = 19_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",

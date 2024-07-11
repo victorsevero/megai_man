@@ -393,6 +393,7 @@ class StageWrapper(gym.Wrapper):
         time_punishment_factor=0,
         truncate_if_no_improvement=True,
         no_enemies=False,
+        no_boss=True,
         screen_rewards=False,
         score_reward=0,
         distance_only_on_ground=False,
@@ -424,6 +425,7 @@ class StageWrapper(gym.Wrapper):
         self.obs_space = obs_space
 
         self.no_enemies = no_enemies
+        self.no_boss = no_boss
 
         self.screen_rewards = screen_rewards
         self.score_reward = score_reward
@@ -605,6 +607,17 @@ class StageWrapper(gym.Wrapper):
         return variables
 
     def reward(self, action):
+        if self.no_boss and (
+            self.unwrapped.data["screen"]
+            == len(self.reward_calculator.screen_offset_map) - 1
+        ):
+            return 1
+        if (
+            self.unwrapped.data["touching_obj_top"] == SPIKE_VALUE
+            or self.unwrapped.data["touching_obj_side"] == SPIKE_VALUE
+        ):
+            return -1.1
+
         if self.screen_rewards:
             current_screen = self.unwrapped.data["screen"]
             reward = current_screen - self.prev_screen
@@ -669,6 +682,12 @@ class StageWrapper(gym.Wrapper):
             > self.reward_calculator.SCREENS_OFFSETS_CUTMAN[
                 self.reward_calculator.max_screen
             ]["y"]
+        ):
+            return True
+
+        # reached boss chamber
+        if self.no_boss and (
+            data["screen"] == len(self.reward_calculator.screen_offset_map) - 1
         ):
             return True
 

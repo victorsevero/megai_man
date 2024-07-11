@@ -60,7 +60,7 @@ def test():
     # )
     model_name = (
         "models/"
-        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-04_gamma0.99_vf1_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+scrn1_scorerew0_dmg0.05_ground_termbackscrn_spikefix6_Vscrnfix2_scen5multnoB_mask_NO_ENEM2_vsbl"
+        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-04_gamma0.99_vf1_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+scrn1_scorerew0_dmg0.05_ground_termbackscrn_spikefix7_Vscrnfix2_scen5multnoB_mask_NO_ENEM2_vsbl"
         "_best/best_model"
     )
     # model_name = (
