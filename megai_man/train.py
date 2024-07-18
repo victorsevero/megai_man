@@ -69,24 +69,13 @@ def train():
         "ent_coef": 1e-4,
         "vf_coef": 1,
         "max_grad_norm": 0.5,
-        "policy_kwargs": {
-            "share_features_extractor": False,
-            # "lstm_hidden_size": 128,
-        }
-        # "policy_kwargs": dict(net_arch=[dict(pi=[256, 256], vf=[256, 256])])
-        # "policy_kwargs": {
-        # "features_extractor_class": WideNatureCNN,
-        # "features_extractor_kwargs": {"features_dim": 1024},
-        # },
+        "policy_kwargs": {"share_features_extractor": False},
     }
 
     model_name = (
         f"sevs{n_envs if n_envs != 8 else ''}"
-        # "_NIGHTMAREPIT"
-        # f"_{'all' if env_kwargs['screen'] is None else env_kwargs['screen']}"
         f"_steps{n_steps}_batch{batch_size}"
         f"_lr{model_kwargs['learning_rate']:.1e}"
-        # "_lrLin4e-4"
         f"_epochs{model_kwargs['n_epochs']}"
         f"_clip{model_kwargs['clip_range']}"
         f"_ecoef{model_kwargs['ent_coef']:.0e}"
@@ -94,43 +83,22 @@ def train():
         f"_vf{model_kwargs['vf_coef']}"
         f"_maxgrad{model_kwargs['max_grad_norm']}"
         f"{'_twoFEs' if not model_kwargs['policy_kwargs']['share_features_extractor'] else ''}"
-        # "_RND"
-        # "_ICM"
-        # "_wide_pivf"
-        # "_rewnorm2"
-        # "_featdim1024"
         "_"  # for separating env parameters
         f"_fs{frameskip}"
         f"_stack{frame_stack}"
-        # "_lstm128"
-        # "_crop224"
-        # "_hw224"
-        # "_Near"
         f"_rews{env_kwargs['forward_factor']}+scrn1"
         f"_scorerew{env_kwargs['score_reward']}"
         f"_dmg{env_kwargs['fixed_damage_punishment']}"
-        # "screenrews"
-        # f"_time_punish{time_punishment_factor}"
         "_ground"
-        # "_trunc6min"
         "_termbackscrn"
-        # "_dmgterm"
-        # "_trunc60snoprog"
         # fmt: off
         "_spikefix7"
         "_Vscrnfix2"
         "_scen5multnoB"
-        # "_skipB"
         # fmt: on
         f"{'_multin6def' if multi_input else ''}"
-        # "_recurrent"
         f"{'_mask' if AlgoClass == MaskablePPO else ''}"
-        # "_contmap"
-        # "_NIGHTMAREREW"
-        # "_RE3"
-        # "_curriculum500k"
         "_NO_ENEM2"
-        # "_editROM3"
         "_vsbl"
     )
     tensorboard_log = "logs/cutman"
@@ -144,10 +112,6 @@ def train():
     else:
         model = AlgoClass(
             policy="CnnPolicy" if not multi_input else "MultiInputPolicy",
-            # policy="CnnLstmPolicy"
-            # if not multi_input
-            # else CustomMultiInputLstmPolicy,
-            # else "MultiInputLstmPolicy",
             env=venv,
             tensorboard_log=tensorboard_log,
             verbose=0,
@@ -167,10 +131,8 @@ def train():
             "n_envs": 1,
             "screen": None,
             "render_mode": None,
-            # "_enforce_subproc": True,
         }
     )
-    # eval_callback = EvalCallback(
     eval_callback = MaskableEvalCallback(
         # same env, just replacing n_envs with 1
         eval_venv,
@@ -183,9 +145,7 @@ def train():
     model.learn(
         total_timesteps=total_timesteps,
         callback=[
-            # CuriosityCallback(ICM),
             StageLoggingCallback(),
-            # CurriculumCallback(freq=500_000 // n_envs),
             TrainingStatsLoggerCallback(),
             checkpoint_callback,
             eval_callback,

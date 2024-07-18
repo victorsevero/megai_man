@@ -1,0 +1,60 @@
+{
+  "info": {
+    "lives": {
+      "address": 166,
+      "type": "|u1"
+    },
+    "health": {
+      "address": 106,
+      "type": "|u1"
+    },
+    "boss_health": {
+      "address": 1729,
+      "type": "|u1"
+    },
+    "x": {
+      "address": 1152,
+      "type": "|u1"
+    },
+    "y": {
+      "address": 1536,
+      "type": "|u1"
+    },
+    "screen": {
+      "address": 1120,
+      "type": "|u1"
+    },
+    "camera_state": {
+      "address": 28,
+      "type": "|u1"
+    },
+    "stage": {
+      "address": 49,
+      "type": "|u1"
+    },
+    "camera_x": {
+      "address": 26,
+      "type": "|u1"
+    },
+    "camera_y": {
+      "address": 30,
+      "type": "|u1"
+    },
+    "camera_screen": {
+      "address": 27,
+      "type": "|u1"
+    },
+    "touching_obj_top": {
+      "address": 44,
+      "type": "|u1"
+    },
+    "touching_obj_side": {
+      "address": 148,
+      "type": "|u1"
+    },
+    "blink_counter": {
+      "address": 85,
+      "type": "|u1"
+    }
+  }
+}

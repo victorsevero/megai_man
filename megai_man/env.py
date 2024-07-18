@@ -14,10 +14,7 @@ from stable_baselines3.common.vec_env import (
 from megai_man.wrappers import (
     ActionSkipWrapper,
     FrameskipWrapper,
-    MultiInputWrapper,
     StageWrapper,
-    TargetScreenWrapper,
-    VecRemoveVectorStacks,
     WarpFrame,
 )
 
@@ -28,32 +25,23 @@ retro.data.Integrations.add_custom_path(
 
 def make_venv(
     n_envs=8,
+    no_enemies=False,
     state=retro.State.DEFAULT,
-    frameskip=1,
     frame_stack=3,
-    truncate_if_no_improvement=True,
-    obs_space="screen",
-    action_space="multi_discrete",
-    crop_img=True,
     render_mode="human",
     record=False,
-    multi_input=False,
-    curriculum=False,
     _enforce_subproc=False,
     **stage_wrapper_kwargs,
 ):
+    frameskip = 4
+
     def env_fn():
         return make_env(
+            no_enemies=no_enemies,
             state=state,
             frameskip=frameskip,
-            truncate_if_no_improvement=truncate_if_no_improvement,
-            obs_space=obs_space,
-            action_space=action_space,
-            crop_img=crop_img,
             render_mode=render_mode,
             record=record,
-            multi_input=multi_input,
-            curriculum=curriculum,
             **stage_wrapper_kwargs,
         )
 
@@ -61,11 +49,8 @@ def make_venv(
         venv = DummyVecEnv([env_fn])
     else:
         venv = SubprocVecEnv([env_fn] * n_envs)
-    if obs_space == "screen":
-        venv = VecFrameStack(venv, n_stack=frame_stack)
-        venv = VecTransposeImage(venv)
-        if multi_input:
-            venv = VecRemoveVectorStacks(venv)
+    venv = VecFrameStack(venv, n_stack=frame_stack)
+    venv = VecTransposeImage(venv)
     venv = VecMonitor(
         venv,
         info_keywords=("distance", "min_distance", "max_screen", "hp"),
@@ -74,65 +59,36 @@ def make_venv(
 
 
 def make_env(
+    no_enemies=False,
     state=retro.State.DEFAULT,
     frameskip=1,
-    truncate_if_no_improvement=True,
-    obs_space="screen",
-    action_space="multi_discrete",
-    crop_img=True,
     render_mode="human",
     record=False,
-    multi_input=False,
-    curriculum=False,
     **stage_wrapper_kwargs,
 ):
-    if obs_space == "screen":
-        obs_type = retro.Observations.IMAGE
-    elif obs_space == "ram":
-        obs_type = retro.Observations.RAM
+    if no_enemies:
+        game = "MegaMan-noEnemies-Nes"
     else:
-        raise ValueError(f"Invalid observation space `{obs_space}`")
+        game = "MegaMan-v1-Nes"
 
-    if action_space == "multi_discrete":
-        use_restricted_actions = retro.Actions.MULTI_DISCRETE
-    elif action_space == "filtered":
-        use_restricted_actions = retro.Actions.FILTERED
-    elif action_space == "discrete":
-        use_restricted_actions = retro.Actions.DISCRETE
-    else:
-        raise ValueError(f"Invalid action space `{action_space}`")
     env = retro.make(
-        game="MegaMan-v2-Nes",
+        game=game,
         state=state,
         inttype=retro.data.Integrations.CUSTOM_ONLY,
-        use_restricted_actions=use_restricted_actions,
+        use_restricted_actions=retro.Actions.MULTI_DISCRETE,
         render_mode=render_mode,
         record=record,
-        obs_type=obs_type,
+        obs_type=retro.Observations.IMAGE,
     )
     if not stage_wrapper_kwargs.get("no_enemies", False):
         env = ActionSkipWrapper(env)
     if frameskip > 1:
         env = FrameskipWrapper(env, skip=frameskip)
-    if not truncate_if_no_improvement:
-        # max number of frames: NES' FPS * seconds // frameskip
-        env = TimeLimit(env, max_episode_steps=(60 * 360) // frameskip)
-    env = StageWrapper(
-        env,
-        frameskip=frameskip,
-        obs_space=obs_space,
-        stage=0,
-        truncate_if_no_improvement=truncate_if_no_improvement,
-        **stage_wrapper_kwargs,
-    )
-    if obs_space == "screen":
-        env = WarpFrame(env, crop=crop_img)
-        # env = WarpFrame(env, width=240, height=224, crop=crop_img)
+    # max number of frames: NES' FPS * seconds // frameskip
+    env = TimeLimit(env, max_episode_steps=(60 * 360) // frameskip)
+    env = StageWrapper(env, frameskip=frameskip, **stage_wrapper_kwargs)
+    env = WarpFrame(env)
 
-    if multi_input:
-        env = MultiInputWrapper(env)
-    if curriculum:
-        env = TargetScreenWrapper(env)
     return env
 
 
