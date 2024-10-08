@@ -1,12 +1,13 @@
 from pathlib import Path
 
-import wandb
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
 from stable_baselines3.common.callbacks import CheckpointCallback
 from wandb.integration.sb3 import WandbCallback
 
+import wandb
 from megai_man.callbacks import (
+    CurriculumNoEnemiesCallback,
+    MaskableEvalCallback,
     StageLoggingCallback,
     TrainingStatsLoggerCallback,
 )
@@ -15,12 +16,13 @@ from megai_man.env import make_venv
 
 def train():
     n_envs = 8
+    dmg = 0.05
     env_kwargs = {
         "n_envs": n_envs,
         "state": "CutMan",
         "render_mode": None,
         "no_enemies": False,
-        "damage_punishment": 0.05,
+        "damage_punishment": dmg,
         "forward_factor": 0.05,
         "backward_factor": 0.055,
         "time_punishment_factor": 0,
@@ -28,7 +30,15 @@ def train():
     }
     venv = make_venv(**env_kwargs)
 
-    model_name = "cutman_pretrained"
+    model_name = [
+        "cutman_pretrained",
+        "_noTermBackScreen",
+        f"_dmg{dmg}" if dmg != 0.05 else "",
+        "_gamma95",
+        "_10spikepunish",
+        "_enemies_curriculum",
+    ]
+    model_name = "".join(model_name)
     tensorboard_log = "logs/cutman"
 
     if Path(f"models/{model_name}.zip").exists():
@@ -45,10 +55,11 @@ def train():
             env=venv,
             device="cuda",
             tensorboard_log=tensorboard_log,
+            gamma=0.95,
         )
         reset_num_timesteps = True
 
-    total_timesteps = 20_000_000
+    total_timesteps = 10_000_000
     checkpoint_callback = CheckpointCallback(
         save_freq=1_000_000 // n_envs,
         save_path="checkpoints/",
@@ -62,15 +73,22 @@ def train():
             "render_mode": None,
         }
     )
+
+    # first_enemy_screen = None
+    first_enemy_screen = 0
+    venv.env_method("set_screen_with_enemies", first_enemy_screen)
+    eval_venv.env_method("set_screen_with_enemies", first_enemy_screen)
+
     eval_callback = MaskableEvalCallback(
         # same env, just replacing n_envs with 1
         eval_venv,
+        callback_after_eval=CurriculumNoEnemiesCallback(first_enemy_screen),
         n_eval_episodes=1,
-        eval_freq=250_000 // n_envs,
+        eval_freq=100_000 // n_envs,
         best_model_save_path=f"models/{model_name}_best",
         verbose=0,
     )
-    wandb.init(project="mega-man-1")
+    wandb.init(project="mega-man-1", sync_tensorboard=True, save_code=True)
     model.learn(
         total_timesteps=total_timesteps,
         callback=[

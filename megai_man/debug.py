@@ -31,13 +31,11 @@ class Debugger:
         self.small_font = pygame.font.SysFont("opensans", 12)
         frameskip = 4
         self.frame_stack = 3
-        self.multi_input = True
-        self.action_space = "multi_discrete"
         if model is not None and "/dqn_" in model:
             ModelClass = DQN
         else:
             if self.frame_stack > 1:
-                ModelClass = PPO
+                ModelClass = MaskablePPO
             else:
                 ModelClass = RecurrentPPO
         self.env = make_venv(
@@ -45,24 +43,14 @@ class Debugger:
             state="CutMan",
             # state="NightmarePit",
             screen=None,
-            frameskip=frameskip,
             frame_stack=self.frame_stack,
-            truncate_if_no_improvement=True,
-            obs_space="screen",
-            action_space=self.action_space,
-            crop_img=False,
             no_enemies=True,
             render_mode=None,
             record=record,
-            damage_terminate=False,
-            fixed_damage_punishment=0.12,
+            damage_punishment=0.12,
             forward_factor=0.05,
             backward_factor=0.055,
-            multi_input=self.multi_input,
-            screen_rewards=False,
-            score_reward=0,
             distance_only_on_ground=True,
-            term_back_screen=True,
         )
         self.retro_env = self.env.unwrapped.envs[0].unwrapped
         self.model = model
@@ -72,6 +60,7 @@ class Debugger:
         self.record_grayscale_obs = record_grayscale_obs
         self.frame_by_frame = frame_by_frame
         self.deterministic = deterministic
+        self.action_space = "multi_discrete"
         self.action_mapper = ActionMapper(self.retro_env, self.action_space)
         self.desired_fps = 60 // frameskip
         self.clock = pygame.time.Clock()
@@ -93,8 +82,6 @@ class Debugger:
         resize_factor = 5
 
         obs_space = self.env.observation_space
-        if self.multi_input:
-            obs_space = obs_space["image"]
         env_height, env_width = obs_space.shape[1:]
 
         self.text_area_width = 800
@@ -418,11 +405,7 @@ class Debugger:
 
     def run(self):
         obs = self.env.reset()
-        if self.multi_input:
-            vector = obs["vector"][0]
-            image = obs["image"]
-        else:
-            image = obs
+        image = obs
         if self.frame_stack == 1:
             self.lstm_states = None
             self.episode_starts = np.ones((1,), dtype=bool)
@@ -437,9 +420,6 @@ class Debugger:
         self.step = 0
 
         while not done:
-            if self.multi_input:
-                self.draw_arrow(vector)
-
             if self.model is None and not self.handle_events():
                 break
 
@@ -477,7 +457,8 @@ class Debugger:
                 action = action[0]
                 buttons = self.retro_env.get_action_meaning(action)
                 if self.action_space == "multi_discrete":
-                    action_probs = self._get_action_probs(obs)
+                    # action_probs = self._get_action_probs(obs)
+                    pass
                 else:
                     # TODO: implement this for discrete
                     action_probs = "N/A"
@@ -503,11 +484,7 @@ class Debugger:
                 break
 
             obs, rewards, dones, infos = self.env.step([action])
-            if self.multi_input:
-                vector = obs["vector"][0]
-                image = obs["image"]
-            else:
-                image = obs
+            image = obs
             if self.frame_stack == 1:
                 self.episode_starts = dones
             cum_reward += rewards[0]
@@ -662,11 +639,11 @@ class TensorExtractor(nn.Module):
 
 
 if __name__ == "__main__":
-    model = (
-        "checkpoints/"
-        "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+scrn1_scorerew0_dmg0.05_ground_termbackscrn_spikefix6_Vscrnfix2_scen5multnoB_skipB_multin5def_NO_ENEM2_vsbl"
-        "_9000000_steps"
-    )
+    # model = (
+    #     "checkpoints/"
+    #     "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+scrn1_scorerew0_dmg0.05_ground_termbackscrn_spikefix6_Vscrnfix2_scen5multnoB_skipB_multin5def_NO_ENEM2_vsbl"
+    #     "_9000000_steps"
+    # )
     # model = (
     #     "models/"
     #     "sevs_steps512_batch64_lr3.0e-04_epochs10_clip0.2_ecoef1e-03_gamma0.99_vf0.5__fs4_stack4_rews0.05+screen1_dmg0.12_groundonly_termbackscreen2_spikefix6_scen4_skipB_multinput5_default_visible"
@@ -677,10 +654,11 @@ if __name__ == "__main__":
     #     "sevs_steps1024_batch128_lr2.5e-04_epochs4_clip0.2_ecoef1e-03_gamma0.99_vf0.5_maxgrad0.5_twoFEs__fs4_stack3_rews0.05+screen1_scorerew0_dmg0.05_groundonly_termbackscreen2_spikefix6_scen5multi_skipB_multinput5_default_NO_ENEMIES2_visible"
     #     "_best/best_model"
     # )
+    model = "models/no_enemies_complete"
     debugger = Debugger(
-        # model=model,
+        model=model,
         deterministic=False,
-        frame_by_frame=True,
+        frame_by_frame=False,
         # graph=True,
         # grad_cam=False,
     )

@@ -134,9 +134,19 @@ class StageWrapper(gym.Wrapper):
         self.no_enemies = no_enemies
         self.no_boss = no_boss
 
+        self._set_enabled_enemies_vars()
+        # -2 because we don't need to count the boss chamber
+        self.screen_with_enemies = (
+            len(self.reward_calculator.SCREENS_OFFSETS_CUTMAN) - 2
+        )
+        self.last_screen = (
+            len(self.reward_calculator.SCREENS_OFFSETS_CUTMAN) - 1
+        )
+
     def reset(self, *, seed=None, options=None):
         self.reward_calculator.reset()
         observation, _ = self.env.reset(seed=seed, options=options)
+        self._remove_enemies_if_needed()
 
         self.reward_calculator.update_position(self.unwrapped.data)
         self.reward_calculator.prev_distance = (
@@ -152,15 +162,18 @@ class StageWrapper(gym.Wrapper):
 
     def step(self, action):
         observation, *_ = self.env.step(action)
+        self._remove_enemies_if_needed()
         if self.unwrapped.data["camera_y"] != 0:
             while self.unwrapped.data["camera_y"] != 0:
                 observation, *_ = self.env.step(
                     np.zeros(self.action_space.shape, dtype=np.int64)
                 )
+                self._remove_enemies_if_needed()
             for _ in range(int(np.ceil(35 / self.frameskip))):
                 observation, *_ = self.env.step(
                     np.zeros(self.action_space.shape, dtype=np.int64)
                 )
+                self._remove_enemies_if_needed()
 
         return (
             observation,
@@ -180,7 +193,7 @@ class StageWrapper(gym.Wrapper):
             self.unwrapped.data["touching_obj_top"] == SPIKE_VALUE
             or self.unwrapped.data["touching_obj_side"] == SPIKE_VALUE
         ):
-            return -1.1
+            return -10
 
         reward = self.reward_calculator.get_stage_reward(self.unwrapped.data)
         self.min_distance = self.reward_calculator.min_distance
@@ -209,8 +222,9 @@ class StageWrapper(gym.Wrapper):
             return True
 
         if (
+            self.no_enemies
             # backed a whole screen
-            data["screen"] < self.reward_calculator.max_screen
+            and data["screen"] < self.reward_calculator.max_screen
             # current screen is below max screen
             and self.reward_calculator.SCREENS_OFFSETS_CUTMAN[data["screen"]][
                 "y"
@@ -225,6 +239,7 @@ class StageWrapper(gym.Wrapper):
         if self.no_boss and (
             data["screen"] == len(self.reward_calculator.screen_offset_map) - 1
         ):
+            self.reward_calculator.update_position(data)
             return True
 
         return False
@@ -263,6 +278,21 @@ class StageWrapper(gym.Wrapper):
             return mask
         else:
             return [True] * sum(self.action_space.nvec)
+
+    def set_screen_with_enemies(self, screen):
+        self.screen_with_enemies = screen
+
+    def _set_enabled_enemies_vars(self):
+        for i in range(1, 0x20):
+            self.unwrapped.data.set_variable(
+                f"enemy{i}_enabled",
+                {"address": 0x600 + i, "type": "|u1"},
+            )
+
+    def _remove_enemies_if_needed(self):
+        if self.unwrapped.data["screen"] < self.screen_with_enemies:
+            for i in range(1, 0x20):
+                self.unwrapped.data.set_value(f"enemy{i}_enabled", 0xF8)
 
 
 class StageReward:
@@ -362,7 +392,8 @@ class StageReward:
             distance = self.prev_distance
 
         # some tiles were incorrectly mapped to -1, let's hope this is enough
-        if distance == -1:
+        invalid_distance = distance == -1
+        if invalid_distance:
             distance = self.prev_distance
 
         if distance < self.min_distance:
@@ -377,6 +408,9 @@ class StageReward:
             distance_diff = self.prev_distance - distance
 
         self.prev_distance = distance
+
+        # if invalid_distance:
+        #     return self.backward_factor * 1
 
         if distance_diff >= 0:
             return self.forward_factor * distance_diff

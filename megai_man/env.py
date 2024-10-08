@@ -80,13 +80,18 @@ def make_env(
         record=record,
         obs_type=retro.Observations.IMAGE,
     )
-    if not stage_wrapper_kwargs.get("no_enemies", False):
+    if not no_enemies:
         env = ActionSkipWrapper(env)
     if frameskip > 1:
         env = FrameskipWrapper(env, skip=frameskip)
     # max number of frames: NES' FPS * seconds // frameskip
     env = TimeLimit(env, max_episode_steps=(60 * 360) // frameskip)
-    env = StageWrapper(env, frameskip=frameskip, **stage_wrapper_kwargs)
+    env = StageWrapper(
+        env,
+        frameskip=frameskip,
+        no_enemies=no_enemies,
+        **stage_wrapper_kwargs,
+    )
     env = WarpFrame(env)
 
     return env

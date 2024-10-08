@@ -178,3 +178,6 @@ rom.sfc
 
 # Profiling files
 /*.prof
+
+# Weights & Biases
+wandb/
