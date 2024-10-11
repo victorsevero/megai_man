@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import yaml
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 from PIL import Image
@@ -18,7 +19,7 @@ def get_wall_tiles_paths(prefix):
         str(Path(dir_path) / path)
         for path in paths
         if path.startswith(prefix)
-        and not path.endswith(("-l.png", "-p.png", "-full.png"))
+        and not path.endswith(("-l.png", "-p.png", "full.png"))
     ]
     return sorted(paths)
 
@@ -78,7 +79,15 @@ def get_tiles(prefix):
     return wall_tiles, ladder_tiles, spike_tiles
 
 
-def get_collision_map(img, wall_tiles, ladder_tiles, spike_tiles, start, end):
+def get_collision_map(
+    img,
+    wall_tiles,
+    ladder_tiles,
+    spike_tiles,
+    start,
+    end,
+    prefix,
+):
     width = img.shape[1]
     height = img.shape[0]
     collision_map = np.empty((height // 16, width // 16), dtype=str)
@@ -126,7 +135,7 @@ def get_collision_map(img, wall_tiles, ladder_tiles, spike_tiles, start, end):
                 img[x : x + 16, y : y + 16] = [0, 0, 255]
                 collision_map[x // 16, y // 16] = "e"
 
-    cv2.imwrite("output.png", img)
+    cv2.imwrite(f"output-{prefix}.png", img)
     return collision_map
 
 
@@ -218,7 +227,7 @@ def is_above_spike(node, label_grid, n=3):
 
 
 def is_valid_path(current, neighbor, value_grid, label_grid):
-    max_distance = 3
+    max_distance = 4
     current_y = current[0]
     neighbor_y = neighbor[0]
     neighbor_height = get_relative_height(label_grid, neighbor)
@@ -299,10 +308,14 @@ def draw_grid(img):
 
 
 if __name__ == "__main__":
-    img_path = "images/bg/MegaManMapCutManBG.png"
-    tiles_prefix = "cut"
-    start = (0, 131)
-    end = (193, 54)
+    tiles_prefix = "guts"
+
+    with open(f"megai_man/stages_meta/{tiles_prefix}.yaml") as fp:
+        stage_dict = yaml.safe_load(fp)
+
+    img_path = stage_dict["bg_path"]
+    start = tuple(stage_dict["tiles"]["start"].values())
+    end = tuple(stage_dict["tiles"]["end"].values())
 
     img = cv2.imread(img_path)
     assert (
@@ -316,10 +329,12 @@ if __name__ == "__main__":
         spike_tiles,
         start,
         end,
+        tiles_prefix,
     )
     value_grid = wavefront_expansion(collision_map)
     np.save(
-        Path("megai_man/custom_integrations/MegaMan-v2-Nes/") / "cutman.npy",
+        Path("megai_man/custom_integrations/MegaMan-v1-Nes/")
+        / f"{tiles_prefix}man.npy",
         value_grid,
     )
 
@@ -340,4 +355,4 @@ if __name__ == "__main__":
         Image.Resampling.NEAREST,
     )
     heatmap = draw_grid(heatmap)
-    heatmap.save("heatmap.png")
+    heatmap.save(f"heatmap-{tiles_prefix}.png")

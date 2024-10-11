@@ -52,7 +52,7 @@ def train():
         "term_back_screen": True,
         "_enforce_subproc": False,
     }
-    venv = make_venv(**env_kwargs)
+    # venv = make_venv(**env_kwargs)
     n_steps = 1024
     batch_size = 128
     model_kwargs = {

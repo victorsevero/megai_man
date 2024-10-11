@@ -1,0 +1,8 @@
+bg_path: images/bg/MegaManMapGutsManBG.png
+tiles:
+  start:
+    x: 0
+    y: 11
+  end:
+    x: 225
+    y: 69

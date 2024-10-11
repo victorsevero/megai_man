@@ -34,7 +34,7 @@ def test():
         n_envs=1,
         state="CutMan",
         render_mode="human",
-        record=".",
+        # record=".",
         no_enemies=False,
         damage_punishment=0.05,
         forward_factor=0.05,

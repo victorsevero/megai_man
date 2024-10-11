@@ -74,10 +74,10 @@ def train():
         }
     )
 
-    # first_enemy_screen = None
-    first_enemy_screen = 0
-    venv.env_method("set_screen_with_enemies", first_enemy_screen)
-    eval_venv.env_method("set_screen_with_enemies", first_enemy_screen)
+    first_enemy_screen = None
+    # first_enemy_screen = 0
+    # venv.env_method("set_screen_with_enemies", first_enemy_screen)
+    # eval_venv.env_method("set_screen_with_enemies", first_enemy_screen)
 
     eval_callback = MaskableEvalCallback(
         # same env, just replacing n_envs with 1
