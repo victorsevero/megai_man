@@ -6,6 +6,8 @@ I started it with the intention to make a full run of the game using AI only (ex
 
 All being said, contributions are very welcome! I'd be glad to answer any questions and work on solutions with other people. If you're interested, contact me on [`stable-retro` chat from Farama Foundation Discord Server](https://discord.gg/pJtSNbfr49) (my handler is `@el_sevs`).
 
+🇧🇷: Providenciarei um vídeo sobre o projeto assim que terminá-lo; enquanto isso, veja outros vídeos do meu canal: https://www.youtube.com/@canal.laboratoria
+
 ## Environment specifications
 
 ### Observations
