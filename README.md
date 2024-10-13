@@ -1,5 +1,10 @@
 # Reinforcement Learning for Mega Man (NES)
 
+<p align="middle">
+  <img src="/gifs/example1.gif?raw=true" height="224">
+  <img src="/gifs/example2.gif?raw=true" height="224">
+</p>
+
 This repository contain a full reproducible pipeline on how to train a Deep Reinforcement Learning agent to complete the Cut Man stage of the first game of the Mega Man series from NES.
 
 I started it with the intention to make a full run of the game using AI only (except for some parts where I intended to hardcode a few commands, like selecting a stage). It was much harder than I expected. I always worked alone on it and I don't have the time nor the energy to make a full run of the game by myself.
