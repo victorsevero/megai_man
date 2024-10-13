@@ -1,6 +1,5 @@
 from env import make_venv
 from sb3_contrib import MaskablePPO
-from sb3_contrib.common.maskable.evaluation import evaluate_policy
 from sb3_contrib.common.maskable.utils import get_action_masks
 
 
@@ -41,7 +40,6 @@ def test():
         backward_factor=0.055,
         distance_only_on_ground=True,
     )
-    # TODO: dynamically unwrap, I don't remember how to do this now
     venv.env_method("set_screen_with_enemies", 0)
     # model_name = (
     #     # fmt: off
@@ -65,7 +63,6 @@ def test():
     #     # fmt: on
     # )
     model = MaskablePPO.load(model_name, env=venv)
-    # evaluate_policy(model, venv, n_eval_episodes=1, deterministic=True)
     evaluate_policy_details(model, venv, deterministic=True)
 
 

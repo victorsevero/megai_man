@@ -1,11 +1,8 @@
 import os
-from pathlib import Path
 from time import time
 
-import gymnasium as gym
 import numpy as np
 import torch as th
-from PIL import Image
 from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
 from stable_baselines3.common.utils import safe_mean
@@ -15,8 +12,9 @@ from megai_man.utils import evaluate_policy
 
 
 class StageLoggingCallback(BaseCallback):
-    def __init__(self, verbose=0):
+    def __init__(self, no_boss=True, verbose=0):
         super().__init__(verbose)
+        self.no_boss = no_boss
 
     def _on_step(self) -> bool:
         return True
@@ -26,45 +24,54 @@ class StageLoggingCallback(BaseCallback):
             len(self.model.ep_info_buffer) > 0
             and len(self.model.ep_info_buffer[0]) > 0
         ):
-            # TODO: log min/max rewards?
-            # self.logger.record("rollout/ep_rew_mean", safe_mean([ep_info["r"] for ep_info in self.ep_info_buffer]))
             hps = [ep_info["hp"] for ep_info in self.model.ep_info_buffer]
             self.logger.record("rollout/final_hp_min", min(hps))
             self.logger.record("rollout/final_hp_mean", safe_mean(hps))
 
-            min_distances = [
-                ep_info["min_distance"]
-                for ep_info in self.model.ep_info_buffer
-            ]
-            self.logger.record(
-                "rollout/min_distance_min",
-                min(min_distances),
-            )
-            self.logger.record(
-                "rollout/min_distance_mean",
-                safe_mean(min_distances),
-            )
+            if self.no_boss:
+                min_distances = [
+                    ep_info["min_distance"]
+                    for ep_info in self.model.ep_info_buffer
+                ]
+                self.logger.record(
+                    "rollout/min_distance_min",
+                    min(min_distances),
+                )
+                self.logger.record(
+                    "rollout/min_distance_mean",
+                    safe_mean(min_distances),
+                )
 
-            final_distances = [
-                ep_info["distance"] for ep_info in self.model.ep_info_buffer
-            ]
-            self.logger.record(
-                "rollout/final_distance_min",
-                min(final_distances),
-            )
-            self.logger.record(
-                "rollout/final_distance_mean",
-                safe_mean(final_distances),
-            )
-            self.logger.record(
-                "rollout/max_screen",
-                max(
-                    [
-                        ep_info["max_screen"]
-                        for ep_info in self.model.ep_info_buffer
-                    ]
-                ),
-            )
+                final_distances = [
+                    ep_info["distance"]
+                    for ep_info in self.model.ep_info_buffer
+                ]
+                self.logger.record(
+                    "rollout/final_distance_min",
+                    min(final_distances),
+                )
+                self.logger.record(
+                    "rollout/final_distance_mean",
+                    safe_mean(final_distances),
+                )
+                self.logger.record(
+                    "rollout/max_screen",
+                    max(
+                        [
+                            ep_info["max_screen"]
+                            for ep_info in self.model.ep_info_buffer
+                        ]
+                    ),
+                )
+            else:
+                boss_hps = [
+                    ep_info["boss_hp"] for ep_info in self.model.ep_info_buffer
+                ]
+                self.logger.record("rollout/final_boss_hp_min", min(boss_hps))
+                self.logger.record(
+                    "rollout/final_boss_hp_mean",
+                    safe_mean(boss_hps),
+                )
 
 
 class CurriculumNoEnemiesCallback(BaseCallback):

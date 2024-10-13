@@ -6,7 +6,7 @@ I started it with the intention to make a full run of the game using AI only (ex
 
 All being said, contributions are very welcome! I'd be glad to answer any questions and work on solutions with other people. If you're interested, contact me on [`stable-retro` chat from Farama Foundation Discord Server](https://discord.gg/pJtSNbfr49) (my handler is `@el_sevs`).
 
-🇧🇷: Providenciarei um vídeo sobre o projeto assim que terminá-lo; enquanto isso, veja outros vídeos do meu canal: https://www.youtube.com/@canal.laboratoria
+🇧🇷: Providenciarei um vídeo sobre o projeto assim que terminá-lo; enquanto isso, veja outros vídeos no [meu canal do YouTube](https://www.youtube.com/@canal.laboratoria)!
 
 ## Environment specifications
 
@@ -29,9 +29,9 @@ Shooting action is masked during pre-training (when the agent is learning on the
 
 This is where things get really messy. There are two types of reward that act exclusively to one another: stage reward and boss reward. Stage reward is applied during most of the stage and boss reward is applied as soon as the player enters the boss chamber.
 
-* Stage reward is a composition of two main factors: distance progress and damage taken. A distance map was made using `megai_man/collision_mapper.py`, which applies Wavefront Expansion with heuristics to calculate which paths the agent can take from the start of the stage to the boss chamber (the end of the stage) and how good is each path. The agent doesn't have direct access to it, but it's used to give positive or negative rewards depending on how much closer the agent is getting to the goal. There are lots of details that don't fit here (but were important to achieve stage completion), but the most important thing is that the positive reward it gets from going forwards is smaller in magnitude than the negative reward it gets from going backwards. This is critical to progress (the agent gets stuck in an infinite loop going forwards and backwards without it). This idea was taken from [[8]](https://github.com/DarkAutumn/triforce).
+* **Stage reward** is a composition of two main factors: distance progress and damage taken. A distance map was made using `megai_man/collision_mapper.py`, which applies Wavefront Expansion with heuristics to calculate which paths the agent can take from the start of the stage to the boss chamber (the end of the stage) and how good is each path. The agent doesn't have direct access to it, but it's used to give positive or negative rewards depending on how much closer the agent is getting to the goal. There are lots of details that don't fit here (but were important to achieve stage completion), but the most important thing is that the positive reward it gets from going forwards is smaller in magnitude than the negative reward it gets from going backwards. This is critical to progress (the agent gets stuck in an infinite loop going forwards and backwards without it). This idea was taken from [[8]](https://github.com/DarkAutumn/triforce).
 
-Boss reward **[NOT YET IMPLEMENTED]** is as simple as a positive reward for damaging the enemy and a negative reward for taking damage.
+* **Boss reward** is as simple as a positive reward for damaging the enemy and a negative reward for taking damage.
 
 ### Termination and Truncation
 
@@ -43,7 +43,7 @@ Episode will be terminated if any of these conditions apply:
 * Player reached boss chamber (this was done to clearly separate these two situations and train them separately).
 
 Episode will be truncated if any of these conditions apply:
-* After `(60 * 60) // frameskip_count = 900 timesteps` (roughly equivalent to 60 seconds of real gameplay) since the last time the agent got to the closest point to the boss chamber it ever got in that episode;
+* After `(60 * 60) // frameskip_count = 900 timesteps` (roughly equivalent to 60 seconds of real gameplay) since the last time the agent got to the closest point to the boss chamber it ever got in that episode (not valid on the boss fight);
 * After `(60 * 360) // frameskip = 5400 timesteps` (roughly equivalent to 360 seconds of real gameplay) since the start of the episode.
 
 ## How to reproduce
@@ -56,6 +56,8 @@ Episode will be truncated if any of these conditions apply:
 6. Run `megai_man/train_pretrained.py` for at least 30M steps. The best model will be stored at `models/cutman_pretrained_noTermBackScreen_gamma95_10spikepunish_enemies_curriculum_best/best_model.zip`
 7. You can see it in action by running `megai_man/test.py`. If you want to record a movie, change the `record` parameter of the `make_venv` function to `record="."`. The concept of movie here is taken from the Tool Assisted Speedrun community, as it's only a button press record, not the actual frames from the game. It will be stored as a `bk2` file
 8. If you want to render the movie into an actual video, run `megai_man/playback_movie.py MegaMan-v1-Nes-CutMan-000000.bk2`
+9. For boss fight, run `megai_man/train_boss.py` for 400k steps. You can see it in action by running `megai_man/test_boss.py`
+
 
 Results of any training step will show up inside `logs` directory. You can visualize them with TensorBoard by running `tensorboard --logdir logs` inside project root directory.
 

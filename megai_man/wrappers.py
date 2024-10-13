@@ -125,6 +125,7 @@ class StageWrapper(gym.Wrapper):
             backward_factor=backward_factor,
             time_punishment_factor=time_punishment_factor / frameskip,
             only_on_ground=distance_only_on_ground,
+            boss_only=not no_boss,
         )
         self.target_screen = screen
         self.frameskip = frameskip
@@ -184,7 +185,10 @@ class StageWrapper(gym.Wrapper):
         )
 
     def reward(self):
-        if self.no_boss and (
+        if not self.no_boss:
+            return self.reward_calculator.get_stage_reward(self.unwrapped.data)
+
+        if (
             self.unwrapped.data["screen"]
             == len(self.reward_calculator.screen_offset_map) - 1
         ):
@@ -242,13 +246,18 @@ class StageWrapper(gym.Wrapper):
             self.reward_calculator.update_position(data)
             return True
 
+        if not self.no_boss and data["boss_health"] == 0:
+            return True
+
         return False
 
     def truncated(self):
-        return (
-            self.reward_calculator.frames_since_last_improvement
-            >= self.max_number_of_frames_without_improvement
-        )
+        if self.no_boss:
+            return (
+                self.reward_calculator.frames_since_last_improvement
+                >= self.max_number_of_frames_without_improvement
+            )
+        return False
 
     def info(self):
         return {
@@ -256,6 +265,7 @@ class StageWrapper(gym.Wrapper):
             "distance": self.reward_calculator.prev_distance,
             "max_screen": self.reward_calculator.max_screen,
             "hp": self.unwrapped.data["health"],
+            "boss_hp": self.unwrapped.data["boss_health"],
             "x": self.unwrapped.data["x"],
             "y": self.unwrapped.data["y"],
             "screen": self.unwrapped.data["screen"],
@@ -335,6 +345,7 @@ class StageReward:
         backward_factor=1,
         time_punishment_factor=0,
         only_on_ground=False,
+        boss_only=False,
     ):
         self.damage_punishment = damage_punishment
         self.forward_factor = forward_factor
@@ -343,12 +354,12 @@ class StageReward:
         self.distance_map = self._get_distance_map(stage)
         self.screen_offset_map = self._get_screen_offset_map(stage)
         self.only_on_ground = only_on_ground
+        self.boss_only = boss_only
 
     def reset(self):
         self.prev_distance = -1  # we don't know distance at start
         self.prev_lives = None
         self.prev_health = 28
-        self.boss_filled_health = False
         self.prev_boss_health = 28
         self.min_distance = self.distance_map.max()
         self.max_screen = 0
@@ -356,7 +367,7 @@ class StageReward:
         self.new_screen = False
 
     def get_stage_reward(self, data):
-        if self._is_in_boss_room(data):
+        if self.boss_only:
             reward = self.boss_reward(data)
         else:
             reward = self.wavefront_expansion_reward(data)
@@ -409,9 +420,6 @@ class StageReward:
 
         self.prev_distance = distance
 
-        # if invalid_distance:
-        #     return self.backward_factor * 1
-
         if distance_diff >= 0:
             return self.forward_factor * distance_diff
         else:
@@ -419,13 +427,13 @@ class StageReward:
 
     def boss_reward(self, data):
         boss_health = data["boss_health"]
-        if self.boss_filled_health:
-            damage = self.prev_boss_health - boss_health
-            self.prev_boss_health = boss_health
-            return damage
-        elif data["boss_health"] == 28:
-            self.boss_filled_health = True
-        return 0
+        damage = self.prev_boss_health - boss_health
+        damage = max(damage, 0)
+        self.prev_boss_health = boss_health
+        if damage:
+            return self.damage_punishment
+        else:
+            return 0
 
     def update_position(self, data):
         screen = data["screen"]

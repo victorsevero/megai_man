@@ -1,23 +1,13 @@
 from pathlib import Path
 
-from callbacks import (
-    CuriosityCallback,
-    CurriculumCallback,
-    StageLoggingCallback,
-    TrainingStatsLoggerCallback,
-)
+from callbacks import StageLoggingCallback, TrainingStatsLoggerCallback
 from env import make_venv
-from rllte.xplore.reward.icm import ICM
-from rllte.xplore.reward.rnd import RND
-from sb3_contrib import MaskablePPO, RecurrentPPO
 from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
-from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from sb3_contrib.ppo_mask import MaskablePPO
+from stable_baselines3.common.callbacks import CheckpointCallback
+from wandb.integration.sb3 import WandbCallback
 
-# import wandb
-from megai_man.policy import CustomMultiInputLstmPolicy, CustomMultiInputPolicy
-
-# from wandb.integration.sb3 import WandbCallback
+import wandb
 
 
 def train():
@@ -52,7 +42,7 @@ def train():
         "term_back_screen": True,
         "_enforce_subproc": False,
     }
-    # venv = make_venv(**env_kwargs)
+    venv = make_venv(**env_kwargs)
     n_steps = 1024
     batch_size = 128
     model_kwargs = {
@@ -141,7 +131,7 @@ def train():
         best_model_save_path=f"models/{model_name}_best",
         verbose=0,
     )
-    # wandb.init(project="mega-man-1")
+    wandb.init(project="mega-man-1", sync_tensorboard=True, save_code=True)
     model.learn(
         total_timesteps=total_timesteps,
         callback=[
@@ -149,7 +139,7 @@ def train():
             TrainingStatsLoggerCallback(),
             checkpoint_callback,
             eval_callback,
-            # WandbCallback(),
+            WandbCallback(),
         ],
         log_interval=1,
         tb_log_name=model_name,
